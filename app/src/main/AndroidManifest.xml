@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:a='http://schemas.android.com/apk/res/android'
+ package='dom.domain' a:versionCode='0' a:versionName='0'>
+    <application a:label='Live Stacker'>
+        <activity a:name='dom.domain.LiveStackerMain'>
+             <intent-filter>
+                <category a:name='android.intent.category.LAUNCHER'/>
+                <action a:name='android.intent.action.MAIN'/>
+                </intent-filter>
+            </activity>
+        </application>
+    </manifest>
