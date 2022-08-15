@@ -6,6 +6,8 @@ import com.sun.jna.Structure;
 import com.sun.jna.Memory;
 import com.sun.jna.Callback;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 public class Stacker {
     public interface NativeStacker extends Library {
         public Pointer stacker_new(int w,int h,int roi_x,int roi_y,int roi_size);
@@ -17,6 +19,7 @@ public class Stacker {
     }
 
     public int processed=0;
+    public AtomicInteger submitted = new AtomicInteger(0);
     public int failed=0;
 
     public Stacker(int w,int h)

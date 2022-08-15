@@ -138,10 +138,9 @@ public class UVC {
     }
     public void closeDevice()
     {
-        api.uvcctl_delete(obj);
-        if(fd != -1) {
-            api.uvcctl_close_fd(fd);
-            fd = -1;
+        if(obj!=null) {
+            api.uvcctl_delete(obj);
+            Log.e("UVC", "LibUVC closed");
         }
     }
     

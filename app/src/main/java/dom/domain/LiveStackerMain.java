@@ -1,4 +1,5 @@
 package dom.domain;
+import android.annotation.SuppressLint;
 import android.app.ActionBar;
 import android.app.AlertDialog;
 import android.app.PendingIntent;
@@ -41,6 +42,8 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 public final class LiveStackerMain extends android.app.Activity
 {
@@ -50,8 +53,12 @@ public final class LiveStackerMain extends android.app.Activity
 
     private TimerTask timerTask = null;
     private LinearLayout layout;
+    private UsbDeviceConnection usbDevice;
+    private Thread ioThread = null;
+    boolean startDone = false;
+    AtomicBoolean saveNonStackedFlag =new AtomicBoolean(false);
 
-    final int exp_w=800 , exp_h=600;
+    int exp_w=640 , exp_h=480;
 
     private TextView stackStatus = null;
     private Stacker stacker;
@@ -69,7 +76,7 @@ public final class LiveStackerMain extends android.app.Activity
 
     protected ImageView img;
 
-    private void saveImage(byte [] pixels,int w,int h)
+    private void saveImage(byte [] pixels,int w,int h,String prefix)
     {
         try {
             File storageDir = new File(
@@ -79,10 +86,10 @@ public final class LiveStackerMain extends android.app.Activity
             new File(storageDir.getPath()).mkdirs();
 
             String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-            File outputFile = new File(storageDir.getPath() + "/livestack_" + timeStamp + ".ppm");
+            File outputFile = new File(storageDir.getPath() + "/" + prefix + "_"+ timeStamp + ".jpeg");
             try (FileOutputStream outputStream = new FileOutputStream(outputFile)) {
-                outputStream.write(("P6\n" + w + " " + h + " 255\n").getBytes());
-                outputStream.write(pixels);
+                Bitmap bm = bytesToBitmap(pixels,w,h);
+                bm.compress(Bitmap.CompressFormat.JPEG,90,outputStream);
             } catch (Exception e) {
                 Log.e("UVC", "Failed to save_image");
             }
@@ -113,7 +120,7 @@ public final class LiveStackerMain extends android.app.Activity
                 catch(Exception e) {
                     Log.e("UVC","Failed to get image");
                 }
-                saveImage(img,exp_w,exp_h);
+                saveImage(img,exp_w,exp_h,"stacked");
             }
         });
     }
@@ -129,15 +136,21 @@ public final class LiveStackerMain extends android.app.Activity
                     Log.i("UVC", String.format("Stacking started %d", stacker.processed + 1));
                     stacker.stackImage(img, false);
                     Log.i("UVC", String.format("Stacking done %d, getting stacked", stacker.processed));
+                    if(saveNonStackedFlag.get()) {
+                        saveImage(img, exp_w, exp_h, String.format("stacked_frame_%05d", stacker.processed));
+                        Log.i("UVC","Saving non-stacked image");
+                    }
                     stacker.getStacked(img);
                     Log.i("UVC", String.format("Stacking done %d", stacker.processed));
                     showImage(img, exp_w, exp_h);
                     final int proc = stacker.processed;
                     final int fail = stacker.failed;
+                    final int submited = stacker.submitted.get();
                     stackStatus.post(new Runnable() {
                         @Override
                         public void run() {
-                            stackStatus.setText(String.format("Stacked: %d/%d",(proc-fail),proc));
+                            stackStatus.setText(String.format("%d/%d/%d",
+                                    submited,(proc-fail),proc));
                         }
                     });
                 }
@@ -157,13 +170,25 @@ public final class LiveStackerMain extends android.app.Activity
         TableLayout controlsLayout = new TableLayout(this);
         controlsLayout.setStretchAllColumns(true);
         CheckBox autoControls = new CheckBox(this);
+        CheckBox saveNonStacked = new CheckBox(this);
+        saveNonStacked.setChecked(false);
+        saveNonStacked.setText("Save");
+        saveNonStacked.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
+                saveNonStackedFlag.set(b);
+            }
+
+        });
         TableRow auto_row = new TableRow(this);
-        autoControls.setText("Auto");
+        autoControls.setText("AE");
         autoControls.setChecked(true);
         auto_row.addView(autoControls);
         stackStatus = new TextView(this);
-        stackStatus.setText("Stacked: N/A");
+        stackStatus.setText("N/A");
+        auto_row.addView(saveNonStacked);
         auto_row.addView(stackStatus);
+
         autoControls.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
@@ -367,7 +392,8 @@ public final class LiveStackerMain extends android.app.Activity
     {
         showImageAt(data,w,h,img);
     }
-    private void showImageAt(byte [] data,int w,int h,ImageView target)
+
+    private Bitmap bytesToBitmap(byte[] data,int w,int h)
     {
         final int[] pixels = new int[w*h];
         int pos=0;
@@ -379,9 +405,16 @@ public final class LiveStackerMain extends android.app.Activity
             pos+=3;
             pixels[i] = color;
         }
-        Log.e("UVC","Setting image");
+        return Bitmap.createBitmap(pixels,w,h,Bitmap.Config.ARGB_8888);
+    }
+    private void saveBitMap(String mark,Bitmap bm)
+    {
 
-        final Bitmap bm = Bitmap.createBitmap(pixels,w,h,Bitmap.Config.ARGB_8888);
+    }
+    private void showImageAt(byte [] data,int w,int h,ImageView target)
+    {
+        final Bitmap bm = bytesToBitmap(data,w,h);
+        Log.e("UVC","Setting image");
         target.post(new Runnable() {
             @Override
             public void run() {
@@ -392,24 +425,48 @@ public final class LiveStackerMain extends android.app.Activity
         });
 
     }
-    private void openCamera(int fd)
-    {
+    private boolean openCamera(int fd) {
         try {
             cam = new UVC();
+            Log.i("UVC", String.format("Opening %d", fd));
             int[] vals = cam.open(fd);
+            Log.i("UVC", String.format("Opened %d", fd));
             StringBuilder sb = new StringBuilder();
-            for(int i=0;i<vals.length;i+=2) {
+            String[] options = new String[vals.length / 2];
+            for (int i = 0; i < vals.length; i += 2) {
+                options[i / 2] = String.format("%d X %d", vals[i], vals[i + 1]);
                 sb.append(vals[i]);
                 sb.append("x");
-                sb.append(vals[i+1]);
+                sb.append(vals[i + 1]);
                 sb.append(" ");
             }
+            Log.i("UVC", String.format("Opened %d: %s", fd, sb.toString()));
+            selectDialog(options, new Consumer<Integer>() {
+                @Override
+                public void accept(Integer index) {
+                    exp_w = vals[index*2];
+                    exp_h = vals[index*2+1];
+                    openStream();
+                }
+            });
+
+        } catch (Exception e) {
+            alertMe("Failed to open camera:" + e.toString());
+            Log.e("UVC", "Failed to open camera:" + e.toString());
+            return false;
+        }
+        return true;
+    }
+    private void openStream()
+    {
+        try {
             final int w=exp_w,h=exp_h;
+            Log.i("UVC",String.format("Selected dims: %dx%d",w,h));
+            cam.setBuffers(5,w*h/2);
             cam.setFormat(w,h,true);
-            cam.setBuffers(20,w*h);
             createControls(cam);
             cam.stream();
-            Thread t = new Thread() {
+            ioThread = new Thread() {
                 @Override
                 public void run()
                 {
@@ -418,14 +475,14 @@ public final class LiveStackerMain extends android.app.Activity
                         try {
                             int r = cam.getFrame(1000000,w,h,data);
                             if(r == 0) {
-                                Log.e("UVC","Timeout");
+                                Log.e("UVC","Timeout on getFrame");
                                 continue;
                             }
                             Log.e("UVC","Got Frame " + r + ":" + w*h*2);
                             synchronized (captureFlag) {
                                 if(captureFlag) {
                                     captureFlag = false;
-                                    saveImage(data,w,h);
+                                    saveImage(data,w,h,"capture");
                                 }
                             }
                             int state;
@@ -441,6 +498,7 @@ public final class LiveStackerMain extends android.app.Activity
                                     break;
                                 case STACK_STACKING:
                                     showThumbnail(data,w,h);
+                                    stacker.submitted.incrementAndGet();
                                     addImageToStack(data);
                                     data = new byte[h*w*3];
                                     break;
@@ -448,22 +506,24 @@ public final class LiveStackerMain extends android.app.Activity
                         }
                         catch(Exception e) {
                             Log.e("UVC",e.toString());
+                            if(cam==null)
+                                break;
                             continue;
                         }
                     }
                 }
             };
-            t.start();
+            ioThread.start();
 
-            Log.e("UVC","Stream Started" + sb.toString());
+            Log.e("UVC","Stream Started: ");
         }
         catch (Exception en) {
-            alertMe(en.toString());
-            Log.e("UVC",en.toString());
+            alertMe("Opening stream failed: " + en.toString());
+            Log.e("UVC","Opening stream failed: " + en.toString());
         }
         catch (Error e) {
-            alertMe(e.toString());
-            Log.e("UVC",e.toString());
+            alertMe("Opening Failied fataly:" + e.toString());
+            Log.e("UVC","Opening Failied fataly:" + e.toString());
         }
     }
 
@@ -474,6 +534,24 @@ public final class LiveStackerMain extends android.app.Activity
             cam.closeDevice();
             cam = null;
         }
+
+        /*if(usbDevice != null) {
+            usbDevice.close();
+            usbDevice=null;
+        }*/
+
+        if(ioThread != null) {
+            ioThread.stop();
+            try {
+                ioThread.join();
+            }
+            catch(Exception e) {
+                Log.e("UVC","Failed to stop io thread" + e.toString());
+            }
+        }
+
+        executorService.shutdownNow();
+
         super.onStop();
     }
 
@@ -491,7 +569,8 @@ public final class LiveStackerMain extends android.app.Activity
     protected @Override void onCreate( final android.os.Bundle activityState )
     {
         super.onCreate( activityState );
-        this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        Log.i("UVC","onCreate:" + this.toString() );
+        //this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
         UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
         HashMap<String, UsbDevice> deviceList = manager.getDeviceList();
@@ -539,11 +618,23 @@ public final class LiveStackerMain extends android.app.Activity
 
                         if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
                             if (device != null) {
+                                if(startDone) {
+                                    Log.i("UVC","Usb IO already started");
+                                    return;
+                                }
+                                startDone = true;
+                                Log.i("UVC","Starting USB Device");
+
                                 //UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
                                 UsbDeviceConnection connection = manager.openDevice(device);
                                 int fd = connection.getFileDescriptor();
 
-                                openCamera(fd);
+                                usbDevice = connection;
+                                if(!openCamera(fd)) {
+                                    Log.e("UVC","Opening failed, shutting down USB");
+                                    usbDevice.close();
+                                    Log.e("UVC","Opening failed, usbDevice is closed");
+                                }
                                 //call method to set up device communication
                             }
                         } else {
@@ -561,8 +652,23 @@ public final class LiveStackerMain extends android.app.Activity
             manager.requestPermission(firstDevice, permissionIntent);
         }
     }
+    private void selectDialog(String[] options, Consumer<Integer> callback)
+    {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Select Resolution");
+        builder.setItems(options, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                callback.accept(which);
+            }
+        });
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
+
     private void alertMe(String msg)
     {
+        Log.e("UVC","Message" + msg);
         AlertDialog alertDialog = new AlertDialog.Builder(this).create();
         alertDialog.setTitle("Alert");
         alertDialog.setMessage(msg);
