@@ -8,6 +8,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
+import android.graphics.BitmapFactory;
 import android.hardware.usb.UsbDeviceConnection;
 import android.os.Environment;
 import android.text.Editable;
@@ -15,6 +16,8 @@ import android.text.InputType;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
@@ -31,6 +34,7 @@ import android.hardware.usb.UsbDevice;
 import android.content.Context;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.text.MessageFormat;
 import java.text.SimpleDateFormat;
@@ -62,11 +66,16 @@ public final class LiveStackerMain extends android.app.Activity
 
     private TextView stackStatus = null;
     private Stacker stacker;
+    private float cameraGamma = 1.0f;
     public final int STACK_NONE = 0;
     public final int STACK_STACKING = 1;
     public final int STACK_PAUSED = 2;
+    public final int STACK_DARKS = 3;
+    public final int STACK_DARKS_PAUSED = 4;
     private Integer stackingState = STACK_NONE;
     private ImageView thubmnail = null;
+    private byte[] darks = null;
+    private AtomicBoolean restart = new AtomicBoolean(false);
 
     ExecutorService executorService = Executors.newSingleThreadExecutor();
 
@@ -78,6 +87,37 @@ public final class LiveStackerMain extends android.app.Activity
 
     private void saveImage(byte [] pixels,int w,int h,String prefix)
     {
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        saveImage(pixels,w,h,prefix,"_"+ timeStamp + ".jpeg");
+    }
+    private byte[] loadDarks(int w,int h)
+    {
+        try {
+            File storageDir = new File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+                    "LiveStacker");
+            File inputFile = new File(storageDir.getPath() + String.format("/darks_%dx%d.jpeg",w,h));
+            Bitmap bm = BitmapFactory.decodeFile(inputFile.getPath());
+            byte data[] = new byte[w*h*3];
+            int pos = 0;
+            for(int r=0;r<h;r++){
+                for(int c=0;c<w;c++) {
+                    int color = bm.getPixel(c,r);
+                    data[pos++] = (byte)((color >> 16) & 0xFF);
+                    data[pos++] = (byte)((color >> 8) & 0xFF);
+                    data[pos++] = (byte)(color & 0xFF);
+                }
+            }
+            Log.i("UVC","Darks loaded from "+inputFile.getPath());
+            return data;
+        }
+        catch(Exception e) {
+            Log.i("UVC","Failed to load darks");
+            return null;
+        }
+    }
+    private void saveImage(byte [] pixels,int w,int h,String prefix,String suffix)
+    {
         try {
             File storageDir = new File(
                             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
@@ -85,8 +125,7 @@ public final class LiveStackerMain extends android.app.Activity
 
             new File(storageDir.getPath()).mkdirs();
 
-            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-            File outputFile = new File(storageDir.getPath() + "/" + prefix + "_"+ timeStamp + ".jpeg");
+            File outputFile = new File(storageDir.getPath() + "/" + prefix + suffix);
             try (FileOutputStream outputStream = new FileOutputStream(outputFile)) {
                 Bitmap bm = bytesToBitmap(pixels,w,h);
                 bm.compress(Bitmap.CompressFormat.JPEG,90,outputStream);
@@ -100,13 +139,23 @@ public final class LiveStackerMain extends android.app.Activity
         }
     }
 
-    private void startStacking() throws Exception
+    private void startStacking(boolean darksStacking) throws Exception
     {
-        Log.e("UVC","Created Starcker");
-        stacker = new Stacker(exp_w, exp_h);
+        Log.e("UVC","Created Starcker for " + (darksStacking ? "darks" : "image"));
+        stacker = new Stacker(exp_w, exp_h,darksStacking ? 0 : -1);
+        if(!darksStacking) {
+            final float targetGamma = 2.2f;
+            stacker.setSourceGamma(cameraGamma);
+            stacker.setTargetGamma(targetGamma);
+            Log.i("UVC",String.format("Using gamma - src %f tgt %f",cameraGamma,targetGamma));
+        }
+        if(!darksStacking && darks != null) {
+            Log.i("UVC","Using darks");
+            stacker.setDarks(darks);
+        }
         Log.e("UVC","Creating stacker is done");
     }
-    private void finishStacking()
+    private void finishStacking(int state)
     {
         final Stacker save = stacker;
         stacker = null;
@@ -116,15 +165,27 @@ public final class LiveStackerMain extends android.app.Activity
                 byte[] img = new byte[exp_h*exp_w*3];
                 try {
                     save.getStacked(img);
+                    if(state == STACK_DARKS_PAUSED) {
+                        darks = img;
+                        saveImage(img,exp_w,exp_h,"darks",String.format("_%dx%d.jpeg",exp_w,exp_h));
+                    }
+                    else {
+                        saveImage(img,exp_w,exp_h,"stacked");
+                    }
+                    stackStatus.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            stackStatus.setText(darksText());
+                        }
+                    });
                 }
                 catch(Exception e) {
                     Log.e("UVC","Failed to get image");
                 }
-                saveImage(img,exp_w,exp_h,"stacked");
             }
         });
     }
-    private void addImageToStack(byte[] img)
+    private void addImageToStack(byte[] img,final boolean restart)
     {
         executorService.execute(new Runnable() {
             @Override
@@ -133,24 +194,24 @@ public final class LiveStackerMain extends android.app.Activity
                     if(stacker == null) {
                         throw new Exception("Stacker is NULL!!!");
                     }
-                    Log.i("UVC", String.format("Stacking started %d", stacker.processed + 1));
-                    stacker.stackImage(img, false);
-                    Log.i("UVC", String.format("Stacking done %d, getting stacked", stacker.processed));
+                    Log.i("UVC", String.format("Stacking started %d", stacker.processed.get() + 1));
+                    stacker.stackImage(img, restart);
+                    Log.i("UVC", String.format("Stacking done %d, getting stacked", stacker.processed.get()));
                     if(saveNonStackedFlag.get()) {
-                        saveImage(img, exp_w, exp_h, String.format("stacked_frame_%05d", stacker.processed));
+                        saveImage(img, exp_w, exp_h, String.format("stacked_frame_%05d", stacker.processed.get()));
                         Log.i("UVC","Saving non-stacked image");
                     }
                     stacker.getStacked(img);
-                    Log.i("UVC", String.format("Stacking done %d", stacker.processed));
+                    Log.i("UVC", String.format("Stacking done %d", stacker.processed.get()));
                     showImage(img, exp_w, exp_h);
-                    final int proc = stacker.processed;
+                    final int proc = stacker.processed.get();
                     final int fail = stacker.failed;
                     final int submited = stacker.submitted.get();
                     stackStatus.post(new Runnable() {
                         @Override
                         public void run() {
                             stackStatus.setText(String.format("%d/%d/%d",
-                                    submited,(proc-fail),proc));
+                                    submited,proc,(proc-fail)));
                         }
                     });
                 }
@@ -164,6 +225,19 @@ public final class LiveStackerMain extends android.app.Activity
         });
     }
 
+    private void resetDarks()
+    {
+        darks = null;
+        stackStatus.setText(darksText());
+    }
+    private String darksText()
+    {
+        if(darks==null)
+            return "No Darks";
+        else
+            return "Darks";
+    }
+
     private void createControls(UVC cam) throws Exception
     {
         UVC.UVCLimits limits = cam.getLimits();
@@ -172,7 +246,7 @@ public final class LiveStackerMain extends android.app.Activity
         CheckBox autoControls = new CheckBox(this);
         CheckBox saveNonStacked = new CheckBox(this);
         saveNonStacked.setChecked(false);
-        saveNonStacked.setText("Save");
+        saveNonStacked.setText("\uD83D\uDCBE");
         saveNonStacked.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
@@ -181,11 +255,11 @@ public final class LiveStackerMain extends android.app.Activity
 
         });
         TableRow auto_row = new TableRow(this);
-        autoControls.setText("AE");
+        autoControls.setText("A");
         autoControls.setChecked(true);
         auto_row.addView(autoControls);
         stackStatus = new TextView(this);
-        stackStatus.setText("N/A");
+        stackStatus.setText(darksText());
         auto_row.addView(saveNonStacked);
         auto_row.addView(stackStatus);
 
@@ -193,6 +267,9 @@ public final class LiveStackerMain extends android.app.Activity
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
                 try{
+                    if(b==true) {
+                        resetDarks();
+                    }
                     cam.setAuto(b);
                 }
                 catch (Exception err) {
@@ -205,20 +282,22 @@ public final class LiveStackerMain extends android.app.Activity
 
         TableRow row = new TableRow(this);
         TextView tmp=new TextView(this);
-        tmp.setText("Exposure");
+        tmp.setText("Exp.");
         row.addView(tmp);
         aeText.setText("");
 
         SeekBar exposure = new SeekBar(this);
-        exposure.setMin((int)Math.max(1,limits.exp_msec_min));
-        exposure.setMax((int)limits.exp_msec_max);
+        exposure.setMin((int)Math.max(1,limits.exp_msec_min/25));
+        exposure.setMax((int)(limits.exp_msec_max/25));
         exposure.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
                 try {
+                    resetDarks();
+                    float exp = i*25;
                     Log.e("UVC",String.format("New exposure %dms",i));
-                    cam.setExposure(i);
-                    aeText.setText(String.format("%dms",i));
+                    cam.setExposure(exp);
+                    aeText.setText(String.format("%3.0fms",exp));
                 }
                 catch(Exception err) {
                     Log.e("UVC","Exposure" + err.toString());
@@ -240,15 +319,17 @@ public final class LiveStackerMain extends android.app.Activity
         tmp.setText("WB");
         wb_row.addView(tmp);
         SeekBar wb = new SeekBar(this);
-        wb.setMin(limits.wb_temp_min);
-        wb.setMax(limits.wb_temp_max);
+        wb.setMin((limits.wb_temp_min+99)/100);
+        wb.setMax(limits.wb_temp_max/100);
         wb.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
                 try {
-                    Log.e("UVC",String.format("%dK",i));
-                    cam.setWBTemperature(i);
-                    wb_text.setText(String.format("WB: %d K",i));
+                    resetDarks();
+                    int temp = i *100;
+                    Log.e("UVC",String.format("%dK",temp));
+                    cam.setWBTemperature(temp);
+                    wb_text.setText(String.format("%dK",temp));
                 }
                 catch(Exception err) {
                     Log.e("UVC","Exposure" + err.toString());
@@ -263,6 +344,43 @@ public final class LiveStackerMain extends android.app.Activity
         wb_row.addView(wb_text);
         controlsLayout.addView(wb_row);
 
+        TextView gamma_text=new TextView(this);
+        gamma_text.setText(String.format("%3.2f",limits.gamma_cur));
+        cameraGamma = limits.gamma_cur;
+        TableRow gamma_row = new TableRow(this);
+        tmp = new TextView(this);
+        tmp.setText("γ");
+        gamma_row.addView(tmp);
+        SeekBar gamma = new SeekBar(this);
+        gamma.setMin((int)Math.ceil(limits.gamma_min*10));
+        gamma.setMax((int)(limits.gamma_max*10));
+        
+        Log.i("UVC",String.format("Gamma range %f ->[ %f ] -> %f",limits.gamma_min,limits.gamma_cur,limits.gamma_max));
+        gamma.setProgress((int)(limits.gamma_cur*10));
+        gamma.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                float val = i * 0.1f;
+                try {
+                    resetDarks();
+                    cam.setGamma(val);
+                    cameraGamma = val;
+                    gamma_text.setText(String.format("%3.2f",val));
+                }
+                catch(Exception err) {
+                    Log.e("UVC",String.format("Failed to set gamma %3.2f: %s",val,err.toString()));
+                }
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+        gamma_row.addView(gamma);
+        gamma_row.addView(gamma_text);
+        controlsLayout.addView(gamma_row);
+
+
         TableRow gain_row = new TableRow(this);
         tmp = new TextView(this);
         tmp.setText("Gain");
@@ -272,14 +390,15 @@ public final class LiveStackerMain extends android.app.Activity
 
         SeekBar gain = new SeekBar(this);
         gain.setMin(0);
-        gain.setMax(100);
+        gain.setMax(10);
         gain.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
                 try {
+                    resetDarks();
                     Log.e("UVC",String.format("New Gain %d%%",i));
-                    cam.setGain(i / 100.0);
-                    gain_val.setText(String.format("%d%%",i));
+                    cam.setGain(i / 10.0);
+                    gain_val.setText(String.format("%d%%",i*10));
                 }
                 catch(Exception err) {
                     Log.e("UVC","Exposure" + err.toString());
@@ -296,7 +415,7 @@ public final class LiveStackerMain extends android.app.Activity
 
         TableRow start_stop_row = new TableRow(this);
         Button capture = new Button(this);
-        capture.setText("Capture");
+        capture.setText("\uD83D\uDCF7");
         capture.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -308,9 +427,8 @@ public final class LiveStackerMain extends android.app.Activity
 
         Button startStack = new Button(this);
         Button continueStack = new Button(this);
-        startStack.setText("Stack");
-        continueStack.setText("Continue");
-        continueStack.setEnabled(false);
+        startStack.setText("≡");
+        continueStack.setText("D");
         startStack.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -318,19 +436,28 @@ public final class LiveStackerMain extends android.app.Activity
                     synchronized (stackingState) {
                         switch (stackingState) {
                             case STACK_NONE:
-                                startStack.setText("Pause");
-                                startStacking();
+                                startStack.setText("⏸︎");
+                                continueStack.setText(">>︎");
+                                continueStack.setEnabled(false);
+                                startStacking(false);
                                 stackingState = STACK_STACKING;
                                 break;
                             case STACK_STACKING:
-                                startStack.setText("Finish");
+                                startStack.setText("\uD83D\uDCBE︎");
                                 continueStack.setEnabled(true);
                                 stackingState = STACK_PAUSED;
                                 break;
+                            case STACK_DARKS:
+                                startStack.setText("\uD83D\uDCBE︎");
+                                continueStack.setEnabled(true);
+                                stackingState = STACK_DARKS_PAUSED;
+                                break;
                             case STACK_PAUSED:
-                                startStack.setText("Stack");
-                                continueStack.setEnabled(false);
-                                finishStacking();
+                            case STACK_DARKS_PAUSED:
+                                startStack.setText("≡");
+                                continueStack.setText("D");
+                                continueStack.setEnabled(true);
+                                finishStacking(stackingState);
                                 stackingState = STACK_NONE;
                                 break;
                         }
@@ -345,12 +472,25 @@ public final class LiveStackerMain extends android.app.Activity
         continueStack.setOnClickListener(new View.OnClickListener() {
              @Override
              public void onClick(View view) {
-                 synchronized (stackingState) {
-                     if (stackingState == STACK_PAUSED) {
-                         stackingState = STACK_STACKING;
-                         continueStack.setEnabled(false);
-                         startStack.setText("Pause");
+                 try {
+                     synchronized (stackingState) {
+                         if (stackingState == STACK_PAUSED || stackingState == STACK_DARKS_PAUSED) {
+                             stackingState = STACK_STACKING;
+                             restart.set(true);
+                             continueStack.setEnabled(false);
+                             startStack.setText("⏸︎");
+                         } else if (stackingState == STACK_NONE) {
+                             startStack.setText("⏸︎");
+                             continueStack.setText(">>︎");
+                             continueStack.setEnabled(false);
+                             startStacking(true);
+                             stackingState = STACK_DARKS;
+                         }
                      }
+                 }
+                 catch(Exception e) {
+                     alertMe("Stacking failed" + e.toString());
+                     Log.e("UVC","Stacking failed",e);
                  }
              }
          });
@@ -461,6 +601,7 @@ public final class LiveStackerMain extends android.app.Activity
     {
         try {
             final int w=exp_w,h=exp_h;
+            darks = loadDarks(w,h);
             Log.i("UVC",String.format("Selected dims: %dx%d",w,h));
             cam.setBuffers(5,w*h/2);
             cam.setFormat(w,h,true);
@@ -497,10 +638,16 @@ public final class LiveStackerMain extends android.app.Activity
                                     showThumbnail(data,w,h);
                                     break;
                                 case STACK_STACKING:
+                                case STACK_DARKS:
                                     showThumbnail(data,w,h);
-                                    stacker.submitted.incrementAndGet();
-                                    addImageToStack(data);
-                                    data = new byte[h*w*3];
+                                    if(stacker.submitted.get() - stacker.processed.get() < 20){
+                                        stacker.submitted.incrementAndGet();
+                                        addImageToStack(data, restart.getAndSet(false));
+                                        data = new byte[h * w * 3];
+                                    }
+                                    else {
+                                        Log.i("UVC","Processing isn't keeping up with frames");
+                                    }
                                     break;
                             }
                         }
@@ -570,6 +717,9 @@ public final class LiveStackerMain extends android.app.Activity
     {
         super.onCreate( activityState );
         Log.i("UVC","onCreate:" + this.toString() );
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                WindowManager.LayoutParams.FLAG_FULLSCREEN);
         //this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
         UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);

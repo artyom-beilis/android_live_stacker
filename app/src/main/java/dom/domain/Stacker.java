@@ -16,9 +16,11 @@ public class Stacker {
         public int stacker_set_darks(Pointer obj,Pointer rgb);
         public int stacker_get_stacked(Pointer obj,Pointer rgb);
         public int stacker_stack_image(Pointer obj,Pointer rgb,int restart);
+        public void stacker_set_src_gamma(Pointer obj,float gamma);
+        public void stacker_set_tgt_gamma(Pointer obj,float gamma);
     }
 
-    public int processed=0;
+    public AtomicInteger processed = new AtomicInteger(0);
     public AtomicInteger submitted = new AtomicInteger(0);
     public int failed=0;
 
@@ -44,13 +46,23 @@ public class Stacker {
         allocate();
     }
 
+    public void setSourceGamma(float gamma)
+    {
+        api.stacker_set_src_gamma(obj,gamma);
+    }
+    public void setTargetGamma(float gamma)
+    {
+        api.stacker_set_tgt_gamma(obj,gamma);
+    }
+
+
     public boolean stackImage(byte[] rgb,boolean restart) throws Exception
     {
         data.write(0,rgb,0,width*height*3);
         int status = api.stacker_stack_image(obj,data,(restart?1:0));
         if(status < 0)
             throw new Exception(api.stacker_error());
-        processed++;
+        processed.incrementAndGet();
         if(status == 0)
             failed++;
         return true;

@@ -26,10 +26,13 @@ public class UVC {
         public float exp_msec_max;
         public int wb_temp_min;
         public int wb_temp_max;
+        public float gamma_min,gamma_max,gamma_cur;
         @Override
         protected List<String> getFieldOrder() {
             return Arrays.asList(new String[] {
-                    "exp_msec_min", "exp_msec_max", "wb_temp_min", "wb_temp_max"
+                    "exp_msec_min", "exp_msec_max",
+                    "wb_temp_min", "wb_temp_max",
+                    "gamma_min", "gamma_max", "gamma_cur"
             });
         }
     };
@@ -50,6 +53,7 @@ public class UVC {
         int uvcctl_auto_mode(Pointer obj,int isAuto);
         int uvcctl_get_control_limits(Pointer obj,UVCLimits.ByReference limits);
         int uvcctl_set_gain(Pointer obj,double range);
+        int uvcctl_set_gamma(Pointer obj,double range);
         int uvcctl_set_exposure(Pointer obj,double exp_ms);
         int uvcctl_set_wb(Pointer obj,int temperature);
 
@@ -83,6 +87,12 @@ public class UVC {
     {
         check(api.uvcctl_set_gain(obj,range),"set gain");
     }
+
+    public void setGamma(double value) throws Exception
+    {
+        check(api.uvcctl_set_gamma(obj,value),"set gamma");
+    }
+
     public void setWBTemperature(int temp) throws Exception
     {
         check(api.uvcctl_set_wb(obj,temp),"set wb");
