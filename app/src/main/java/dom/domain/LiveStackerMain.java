@@ -36,6 +36,13 @@ import android.content.Context;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.text.MessageFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -54,6 +61,7 @@ public final class LiveStackerMain extends android.app.Activity
     private static final String ACTION_USB_PERMISSION =
             "com.android.example.USB_PERMISSION";
     private BroadcastReceiver usbReceiver = null;
+    File storageDir = null;
 
     private TimerTask timerTask = null;
     private LinearLayout layout;
@@ -61,6 +69,7 @@ public final class LiveStackerMain extends android.app.Activity
     private Thread ioThread = null;
     boolean startDone = false;
     AtomicBoolean saveNonStackedFlag =new AtomicBoolean(false);
+    final float targetGamma = -1.0f;
 
     int exp_w=640 , exp_h=480;
 
@@ -74,7 +83,7 @@ public final class LiveStackerMain extends android.app.Activity
     public final int STACK_DARKS_PAUSED = 4;
     private Integer stackingState = STACK_NONE;
     private ImageView thubmnail = null;
-    private byte[] darks = null;
+    private String darks = null;
     private AtomicBoolean restart = new AtomicBoolean(false);
 
     ExecutorService executorService = Executors.newSingleThreadExecutor();
@@ -90,26 +99,17 @@ public final class LiveStackerMain extends android.app.Activity
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         saveImage(pixels,w,h,prefix,"_"+ timeStamp + ".jpeg");
     }
-    private byte[] loadDarks(int w,int h)
+    private File darksName(int w,int h)
+    {
+        return new File(storageDir.getPath() + String.format("/darks_%dx%d.flt",w,h));
+    }
+    private String loadDarks(int w,int h)
     {
         try {
-            File storageDir = new File(
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-                    "LiveStacker");
-            File inputFile = new File(storageDir.getPath() + String.format("/darks_%dx%d.jpeg",w,h));
-            Bitmap bm = BitmapFactory.decodeFile(inputFile.getPath());
-            byte data[] = new byte[w*h*3];
-            int pos = 0;
-            for(int r=0;r<h;r++){
-                for(int c=0;c<w;c++) {
-                    int color = bm.getPixel(c,r);
-                    data[pos++] = (byte)((color >> 16) & 0xFF);
-                    data[pos++] = (byte)((color >> 8) & 0xFF);
-                    data[pos++] = (byte)(color & 0xFF);
-                }
-            }
-            Log.i("UVC","Darks loaded from "+inputFile.getPath());
-            return data;
+            File darks = darksName(w,h);
+            if(!darks.exists())
+                return null;
+            return darks.getPath();
         }
         catch(Exception e) {
             Log.i("UVC","Failed to load darks");
@@ -118,14 +118,12 @@ public final class LiveStackerMain extends android.app.Activity
     }
     private void saveImage(byte [] pixels,int w,int h,String prefix,String suffix)
     {
+        saveImageFullPath(pixels,w,h,storageDir.getPath() + "/" + prefix + suffix);
+    }
+    private void saveImageFullPath(byte [] pixels,int w,int h,String fullPath)
+    {
         try {
-            File storageDir = new File(
-                            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-                       "LiveStacker");
-
-            new File(storageDir.getPath()).mkdirs();
-
-            File outputFile = new File(storageDir.getPath() + "/" + prefix + suffix);
+            File outputFile = new File(fullPath);
             try (FileOutputStream outputStream = new FileOutputStream(outputFile)) {
                 Bitmap bm = bytesToBitmap(pixels,w,h);
                 bm.compress(Bitmap.CompressFormat.JPEG,90,outputStream);
@@ -143,15 +141,25 @@ public final class LiveStackerMain extends android.app.Activity
     {
         Log.e("UVC","Created Starcker for " + (darksStacking ? "darks" : "image"));
         stacker = new Stacker(exp_w, exp_h,darksStacking ? 0 : -1);
+        try(PrintWriter writer = new PrintWriter( String.format("%s/%s_info.txt",storageDir,stacker.uid) , "UTF-8")){
+            writer.println(String.format("%dx%d",exp_w,exp_h));
+            writer.println(String.format("Source Gamma: %f",cameraGamma));
+            writer.println(String.format("Target Gamma: %f",targetGamma));
+            writer.println(darksStacking ? "darks" : "lights");
+        }
         if(!darksStacking) {
-            final float targetGamma = 2.2f;
             stacker.setSourceGamma(cameraGamma);
             stacker.setTargetGamma(targetGamma);
             Log.i("UVC",String.format("Using gamma - src %f tgt %f",cameraGamma,targetGamma));
         }
         if(!darksStacking && darks != null) {
             Log.i("UVC","Using darks");
-            stacker.setDarks(darks);
+            stacker.loadDarks(darks);
+            if(saveNonStackedFlag.get()) {
+                Path src = Paths.get(darks);
+                Path tgt = Paths.get(String.format("%s/%s_darks.flt", storageDir, stacker.uid));
+                Files.copy(src,tgt,StandardCopyOption.REPLACE_EXISTING);
+            }
         }
         Log.e("UVC","Creating stacker is done");
     }
@@ -164,23 +172,30 @@ public final class LiveStackerMain extends android.app.Activity
             public void run() {
                 byte[] img = new byte[exp_h*exp_w*3];
                 try {
-                    save.getStacked(img);
                     if(state == STACK_DARKS_PAUSED) {
-                        darks = img;
-                        saveImage(img,exp_w,exp_h,"darks",String.format("_%dx%d.jpeg",exp_w,exp_h));
+                        String path = darksName(exp_w,exp_h).getPath();
+                        save.saveStackedDarks(path);
+                        darks = path;
                     }
                     else {
-                        saveImage(img,exp_w,exp_h,"stacked");
+                        save.getStacked(img);
+                        String stacked = String.format("%s/%s_stacked.jpeg",storageDir,save.uid);
+                        saveImageFullPath(img, exp_w, exp_h, stacked);
+                        String message = String.format("processed %d\n stacked %d\n",
+                                    save.submitted.get(),save.processed.get());
+                        Files.write(Paths.get(String.format("%s/%s_info.txt",storageDir,stacker.uid)),
+                                message.getBytes(), StandardOpenOption.APPEND);
+
+                        stackStatus.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                stackStatus.setText(darksText());
+                            }
+                        });
                     }
-                    stackStatus.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            stackStatus.setText(darksText());
-                        }
-                    });
                 }
                 catch(Exception e) {
-                    Log.e("UVC","Failed to get image");
+                    Log.e("UVC","Failed to get image: " + e.toString());
                 }
             }
         });
@@ -198,7 +213,9 @@ public final class LiveStackerMain extends android.app.Activity
                     stacker.stackImage(img, restart);
                     Log.i("UVC", String.format("Stacking done %d, getting stacked", stacker.processed.get()));
                     if(saveNonStackedFlag.get()) {
-                        saveImage(img, exp_w, exp_h, String.format("stacked_frame_%05d", stacker.processed.get()));
+                        String save_path = String.format("%s/%s_lights_%05d%s.jpeg",
+                                storageDir,stacker.uid,stacker.processed.get(),(restart ? "_restart": ""));
+                        saveImageFullPath(img, exp_w, exp_h, save_path);
                         Log.i("UVC","Saving non-stacked image");
                     }
                     stacker.getStacked(img);
@@ -720,6 +737,10 @@ public final class LiveStackerMain extends android.app.Activity
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        storageDir = new File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+                "LiveStacker");
+        new File(storageDir.getPath()).mkdirs();
         //this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
         UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);

@@ -6,6 +6,8 @@ import com.sun.jna.Structure;
 import com.sun.jna.Memory;
 import com.sun.jna.Callback;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Stacker {
@@ -18,6 +20,10 @@ public class Stacker {
         public int stacker_stack_image(Pointer obj,Pointer rgb,int restart);
         public void stacker_set_src_gamma(Pointer obj,float gamma);
         public void stacker_set_tgt_gamma(Pointer obj,float gamma);
+        public int stacker_load_darks(Pointer obj,String path);
+        public int stacker_save_stacked_darks(Pointer obj,String path);
+
+
     }
 
     public AtomicInteger processed = new AtomicInteger(0);
@@ -74,6 +80,18 @@ public class Stacker {
             throw new Exception(api.stacker_error());
         data.read(0,rgb,0,width*height*3);
     }
+    public void loadDarks(String path) throws Exception
+    {
+        int status = api.stacker_load_darks(obj,path);
+        if(status < 0)
+            throw new Exception(api.stacker_error());
+    }
+    public void saveStackedDarks(String path) throws Exception
+    {
+        int status = api.stacker_save_stacked_darks(obj,path);
+        if(status < 0)
+            throw new Exception(api.stacker_error());
+    }
     public void setDarks(byte[] rgb) throws Exception
     {
         data.write(0,rgb,0,width*height*3);
@@ -84,6 +102,7 @@ public class Stacker {
 
     private void allocate()
     {
+        uid = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
         data=new Memory(width*height*3);
     }
 
@@ -94,6 +113,7 @@ public class Stacker {
 
     Pointer obj;
     Memory data;
+    String uid;
     int width,height;
 
     NativeStacker api = (Stacker.NativeStacker) Native.load("stack", Stacker.NativeStacker.class);
