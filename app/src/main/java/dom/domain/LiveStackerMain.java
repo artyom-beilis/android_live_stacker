@@ -1,4 +1,5 @@
 package dom.domain;
+import static android.app.PendingIntent.getActivity;
 import static com.zwo.ASIConstants.ASI_ERROR_CODE.ASI_SUCCESS;
 
 import android.annotation.SuppressLint;
@@ -11,6 +12,7 @@ import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.hardware.usb.UsbDeviceConnection;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Environment;
 import android.util.Log;
 import android.view.View;
@@ -291,8 +293,21 @@ public final class LiveStackerMain extends android.app.Activity
                 stopAll();
             }
         });
-
         layout.addView(shutdown);
+
+        Button exit = new Button(this);
+        exit.setText("Close and Exit");
+        exit.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View view) {
+                if(olsActive) {
+                    stopAll();
+                }
+                finishAndRemoveTask();
+            }
+        });
+
+        layout.addView(exit);
+
 
         setButtonStatus();
 
@@ -330,7 +345,7 @@ public final class LiveStackerMain extends android.app.Activity
         try {
             File dataDir = new File(
                     Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-                    "LiveStacker");
+                    "OpenLiveStacker");
             this.dataDir = dataDir.getPath();
             new File(this.dataDir).mkdirs();
             ApplicationInfo appInfo = getApplicationInfo();

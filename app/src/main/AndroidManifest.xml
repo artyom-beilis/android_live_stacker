@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:a='http://schemas.android.com/apk/res/android'
  package='dom.domain' a:versionCode='0' a:versionName='0'>
-    <application a:label='Live Stacker'>
+    <application a:label='Open Live Stacker' a:icon="@mipmap/ic_launcher">
         <activity a:name='dom.domain.LiveStackerMain'>
             <intent-filter>
                 <category a:name='android.intent.category.LAUNCHER'/>
