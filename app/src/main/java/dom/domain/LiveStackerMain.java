@@ -350,6 +350,14 @@ public final class LiveStackerMain extends android.app.Activity
             new File(this.dataDir).mkdirs();
             ApplicationInfo appInfo = getApplicationInfo();
             this.libDir = appInfo.nativeLibraryDir;
+
+
+            String[] pathnames;
+            pathnames = (new File(this.libDir)).list();
+            for(String path: pathnames) {
+                Log.e("OLS","File in lib:" + path);
+            }
+
             this.wwwData = appInfo.dataDir + "/www-data";
             this.simData = appInfo.dataDir + "/sim-data";
             copyFolder("www-data", this.wwwData);

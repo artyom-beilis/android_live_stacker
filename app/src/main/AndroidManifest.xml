@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:a='http://schemas.android.com/apk/res/android'
- package='dom.domain' a:versionCode='0' a:versionName='0'>
-    <application a:label='Open Live Stacker' a:icon="@mipmap/ic_launcher">
-        <activity a:name='dom.domain.LiveStackerMain'>
+<manifest xmlns:android='http://schemas.android.com/apk/res/android'
+ package='dom.domain' android:versionCode='3' android:versionName='0.0.3' android:extractNativeLibs="true">
+    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="33" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application android:label='Open Live Stacker' android:icon="@mipmap/ic_launcher">
+        <activity android:name='dom.domain.LiveStackerMain' android:exported="true">
             <intent-filter>
-                <category a:name='android.intent.category.LAUNCHER'/>
-                <action a:name='android.intent.action.MAIN'/>
+                <category android:name='android.intent.category.LAUNCHER'/>
+                <action android:name='android.intent.action.MAIN'/>
                 </intent-filter>
             </activity>
-        </application>
-    <uses-permission a:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission a:name="android.permission.INTERNET" />
-    </manifest>
+    </application>
+</manifest>

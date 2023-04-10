@@ -62,6 +62,7 @@ public class OLSApi {
                      String driver_option,
                      int driver_parameter)  throws Exception
     {
+        Log.e("OLS","DRIVER DIR" + lib);
         check(api.ols_android_init(data,www,ip,port,lib,driver,driver_option,driver_parameter),
                 "init");
     }
