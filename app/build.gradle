@@ -6,6 +6,7 @@ android {
 
     defaultConfig {
         applicationId "dom.domain"
+        minSdk 14
     }
 
     buildTypes {
@@ -18,6 +19,8 @@ android {
 
 dependencies {
     implementation files('libs/jna-5.9.0.aar')
+    //implementation "androidx.work:work-runtime:2.3.1"
+    api "androidx.work:work-runtime:2.7.0"
     implementation files('/home/artik/AndroidStudioProjects/hw/app/libs/zwocamera.jar')
 }
 

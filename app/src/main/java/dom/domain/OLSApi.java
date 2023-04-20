@@ -26,6 +26,7 @@ public class OLSApi {
                              int driver_parameter);
         int ols_android_run();
         int ols_android_shutdown();
+        int ols_android_get_frames_count();
 
 
     };
@@ -66,6 +67,12 @@ public class OLSApi {
         check(api.ols_android_init(data,www,ip,port,lib,driver,driver_option,driver_parameter),
                 "init");
     }
+
+    public int getFramesCount()
+    {
+        return api.ols_android_get_frames_count();
+    }
+
     public void run() throws Exception
     {
         check(api.ols_android_run(),"run");

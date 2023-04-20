@@ -4,16 +4,21 @@ import static com.zwo.ASIConstants.ASI_ERROR_CODE.ASI_SUCCESS;
 
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
+import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.PendingIntent;
+import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
+import android.graphics.drawable.Icon;
 import android.hardware.usb.UsbDeviceConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.os.IBinder;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
@@ -40,6 +45,8 @@ import java.util.Map;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import androidx.work.WorkManager;
+import androidx.work.OneTimeWorkRequest;
 
 public final class LiveStackerMain extends android.app.Activity
 {
@@ -54,25 +61,16 @@ public final class LiveStackerMain extends android.app.Activity
         openUVCDevice.setEnabled(!olsActive && !asiLoaded);
         openASIDevice.setEnabled(!olsActive && !uvcLoaded);
         openSIMDevice.setEnabled(!olsActive);
-        shutdown.setEnabled(olsActive);
     }
+
 
     private void runService()
     {
         olsActive = true;
         setButtonStatus();
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    Log.e("OLS", "Runnign service from thread");
-                    ols.run();
-                }
-                catch (Exception e) {
-                    Log.e("OLS","Error running " + e.getMessage());
-                }
-            }
-        }).start();
+        WorkManager workManager = WorkManager.getInstance(getApplicationContext());
+        workManager.enqueue(new OneTimeWorkRequest.Builder(OLSWorker.class).build());
+
         try {
             Thread.sleep(500);
         }
@@ -99,7 +97,8 @@ public final class LiveStackerMain extends android.app.Activity
             Log.e("OLS","OLS Init done");
             runService();
         } catch (Exception e) {
-            alertMe("Failed to open camera:" + e.toString());
+            alertMe("Failed to open camera:" + e.toString() );
+            Log.e("OLS",Log.getStackTraceString(e));
             return false;
         }
         return true;
@@ -273,8 +272,7 @@ public final class LiveStackerMain extends android.app.Activity
             }
         });
         layout.addView(openASIDevice);
-        
-        
+
         openSIMDevice = new Button(this);
         openSIMDevice.setText("Simulated Device");
         openSIMDevice.setOnClickListener(new View.OnClickListener() {
@@ -284,17 +282,6 @@ public final class LiveStackerMain extends android.app.Activity
         });
         layout.addView(openSIMDevice);
 
-        shutdown = new Button(this);
-        shutdown.setText("Close Stacker");
-        shutdown.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View view) {
-                olsActive=false;
-                setButtonStatus();
-                stopAll();
-            }
-        });
-        layout.addView(shutdown);
-
         Button exit = new Button(this);
         exit.setText("Close and Exit");
         exit.setOnClickListener(new View.OnClickListener() {
@@ -303,6 +290,7 @@ public final class LiveStackerMain extends android.app.Activity
                     stopAll();
                 }
                 finishAndRemoveTask();
+                System.exit(0);
             }
         });
 
@@ -360,14 +348,17 @@ public final class LiveStackerMain extends android.app.Activity
 
             this.wwwData = appInfo.dataDir + "/www-data";
             this.simData = appInfo.dataDir + "/sim-data";
-            copyFolder("www-data", this.wwwData);
-            copyFolder("sim-data", this.simData);
-            ols.setDirs(this.wwwData, this.dataDir, this.libDir);
+            if(!dirsReady) {
+                copyFolder("www-data", this.wwwData);
+                copyFolder("sim-data", this.simData);
+                ols.setDirs(this.wwwData, this.dataDir, this.libDir);
+            }
             Log.e("OLS", "WWW-Data:" + this.wwwData);
         }
         catch(IOException e) {
             Log.e("OLS","files halding failed" + e.getMessage());
         }
+        dirsReady = true;
     }
     public void copyFolder(String src, String dst) throws IOException
     {
@@ -394,7 +385,7 @@ public final class LiveStackerMain extends android.app.Activity
         }
     }
 
-    private Button openUVCDevice, openASIDevice, openSIMDevice, shutdown;
+    private Button openUVCDevice, openASIDevice, openSIMDevice;
 
     private String wwwData;
     private String simData;
@@ -407,5 +398,6 @@ public final class LiveStackerMain extends android.app.Activity
     static private boolean uvcLoaded = false;
     static private boolean asiLoaded = false;
 
-    static private OLSApi ols;
+    static protected OLSApi ols;
+    static boolean dirsReady = false;
 };
