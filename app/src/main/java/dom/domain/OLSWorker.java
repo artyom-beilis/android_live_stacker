@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class OLSWorker extends Worker {
     private NotificationManager notificationManager;
-    OLSWorker(Context ctx, WorkerParameters p) {
+    public OLSWorker(Context ctx, WorkerParameters p) {
         super(ctx,p);
         notificationManager = (NotificationManager)
                 getApplicationContext().getSystemService(NOTIFICATION_SERVICE);
