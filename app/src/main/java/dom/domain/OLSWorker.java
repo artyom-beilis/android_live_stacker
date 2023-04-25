@@ -18,6 +18,7 @@ import androidx.work.WorkManager;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class OLSWorker extends Worker {
@@ -28,7 +29,7 @@ public class OLSWorker extends Worker {
                 getApplicationContext().getSystemService(NOTIFICATION_SERVICE);
     }
 
-    static final AtomicBoolean is_running = new AtomicBoolean(false);
+    public static final AtomicBoolean is_running = new AtomicBoolean(false);
 
     @SuppressLint("RestrictedApi")
     @NonNull
@@ -36,7 +37,7 @@ public class OLSWorker extends Worker {
     public Result doWork() {
         is_running.set(true);
         int seconds = 0;
-        new Thread(new Runnable() {
+        Thread runThread = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
@@ -46,32 +47,33 @@ public class OLSWorker extends Worker {
                     Log.e("OLS","Open Live Stacker existed with an error:" + e.toString());
                 }
                 finally {
-                    is_running.set(false);
+                    Log.i("ols","Stacker processing existed");
                 }
             }
-        }).start();
-        while(is_running.get() && !isStopped()) {
-            if(isStopped()) {
-                try {
-                    LiveStackerMain.ols.shutdown();
-                }
-                catch (Exception e){
-                }
-                System.exit(0);
-            }
-            try {
-                Thread.sleep(1000);
-            }
-            catch (Exception e){
-            }
+        });
+        runThread.start();
+        while(runThread.isAlive()) {
             int count = LiveStackerMain.ols.getFramesCount();
-            setForegroundAsync(createForegroundInfo(String.format("%d frames in %d seconds",count,seconds)));
-            seconds ++;
+            seconds++;
+            String message = String.format("%d frames in %d seconds", count, seconds);
+            try {
+                Log.i("ols", "updating notification " + message);
+                setForegroundAsync(createForegroundInfo(message,false));
+                runThread.join(1000);
+            }
+            catch (Exception e) {
+                Log.i("ols","Join failed");
+                break;
+            }
         }
+        setForegroundAsync(createForegroundInfo("finished",true));
+        Log.i("ols","Worker finishing");
+        is_running.set(false);
         return Result.success();
     }
     @NonNull
-    private ForegroundInfo createForegroundInfo(@NonNull String progress) {
+    private ForegroundInfo createForegroundInfo(@NonNull String progress,boolean finalCall)
+    {
         // Build a notification using bytesRead and contentLength
 
         Context context = getApplicationContext();
@@ -86,20 +88,19 @@ public class OLSWorker extends Worker {
         notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
+
         PendingIntent intent = PendingIntent.getActivity(context, 0,
                 notificationIntent, 0);
 
-        Notification notification = new Notification.Builder(context)
+        Notification.Builder builder = new Notification.Builder(context)
                 .setContentTitle("OpenLiveStacker")
                 .setContentText(progress)
                 .setSmallIcon(R.mipmap.ic_launcher)
-                .setOngoing(true)
-                .setContentIntent(intent)
-                // Add the cancel action to the notification which can
-                // be used to cancel the worker
-                //.addAction(android.R.drawable.ic_delete, cancel, intent)
-                .build();
-
+                .setAutoCancel(finalCall)
+                .setOngoing(!finalCall);
+        if(!finalCall)
+            builder.setContentIntent(intent);
+        Notification notification = builder.build();
 
         return new ForegroundInfo(1, notification);
     }

@@ -6,6 +6,7 @@ import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
@@ -289,6 +290,10 @@ public final class LiveStackerMain extends android.app.Activity
                 if(olsActive) {
                     stopAll();
                 }
+                Log.i("ols","Cacneling notifications");
+                NotificationManager notificationManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+                notificationManager.cancelAll();
+                Log.i("ols","Cacneling notifications done");
                 finishAndRemoveTask();
                 System.exit(0);
             }
@@ -306,8 +311,14 @@ public final class LiveStackerMain extends android.app.Activity
     void stopAll()
     {
         try {
+            Log.e("ols","Shuttingdown sequence");
             ols.shutdown();
+            while(OLSWorker.is_running.get()) {
+                Thread.sleep(100);
+            }
+            Log.i("ols","Running worked finished");
         } catch (Exception e) {
+            Log.e("ols","Failed to close service:" + e.toString());
             alertMe("Failed to close service:" + e.toString());
         }
     }
