@@ -58,7 +58,7 @@ public class OLSWorker extends Worker {
             String message = String.format("%d frames in %d seconds", count, seconds);
             try {
                 Log.i("ols", "updating notification " + message);
-                setForegroundAsync(createForegroundInfo(message,false));
+                setForegroundAsync(createForegroundInfo(message,false)).get();
                 runThread.join(1000);
             }
             catch (Exception e) {
