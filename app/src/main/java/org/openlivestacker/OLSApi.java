@@ -1,17 +1,8 @@
-package dom.domain;
-import android.os.Environment;
+package org.openlivestacker;
 import android.util.Log;
 
 import com.sun.jna.Library;
 import com.sun.jna.Native;
-import com.sun.jna.Pointer;
-import com.sun.jna.Structure;
-import com.sun.jna.Memory;
-import com.sun.jna.Callback;
-
-import java.io.File;
-import java.util.Arrays;
-import java.util.List;
 
 public class OLSApi {
     public interface OLS extends Library {

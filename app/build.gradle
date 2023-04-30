@@ -1,12 +1,13 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 32
+    compileSdkVersion 33
     buildToolsVersion "33.0.0"
 
     defaultConfig {
-        applicationId "dom.domain"
-        minSdk 14
+        applicationId "org.openlivestacker"
+        minSdk 21
+        targetSdk 29
     }
 
     buildTypes {
@@ -15,6 +16,12 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.txt'
         }
     }
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
 }
 
 dependencies {
@@ -22,6 +29,10 @@ dependencies {
     //implementation "androidx.work:work-runtime:2.3.1"
     api "androidx.work:work-runtime:2.7.0"
     implementation files('/home/artik/AndroidStudioProjects/hw/app/libs/zwocamera.jar')
+    def activity_version = "1.2.1"
+
+    // Java language implementation
+    implementation "androidx.activity:activity:$activity_version"
 }
 
 

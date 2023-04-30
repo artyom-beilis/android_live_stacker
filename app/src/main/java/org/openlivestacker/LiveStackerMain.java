@@ -1,25 +1,21 @@
-package dom.domain;
+package org.openlivestacker;
 import static android.app.PendingIntent.getActivity;
 import static com.zwo.ASIConstants.ASI_ERROR_CODE.ASI_SUCCESS;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
-import android.app.Notification;
-import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
-import android.graphics.drawable.Icon;
+import android.content.pm.PackageManager;
 import android.hardware.usb.UsbDeviceConnection;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Environment;
-import android.os.IBinder;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
@@ -40,33 +36,35 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.work.WorkManager;
 import androidx.work.OneTimeWorkRequest;
 
-public final class LiveStackerMain extends android.app.Activity
-{
+public final class LiveStackerMain extends android.app.Activity {
     private static final String ACTION_USB_PERMISSION =
             "com.android.example.USB_PERMISSION";
     private BroadcastReceiver usbReceiver = null;
 
     ExecutorService executorService = Executors.newSingleThreadExecutor();
 
-    private void setButtonStatus()
-    {
+    private void setButtonStatus() {
         openUVCDevice.setEnabled(!olsActive && !asiLoaded);
         openASIDevice.setEnabled(!olsActive && !uvcLoaded);
         openSIMDevice.setEnabled(!olsActive);
     }
 
 
-    private void runService()
-    {
+    private void runService() {
         olsActive = true;
         setButtonStatus();
         WorkManager workManager = WorkManager.getInstance(getApplicationContext());
@@ -74,15 +72,16 @@ public final class LiveStackerMain extends android.app.Activity
 
         try {
             Thread.sleep(500);
+        } catch (Exception e) {
         }
-        catch(Exception e){}
         Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("http://127.0.0.1:8080/"));
         startActivity(browserIntent);
     }
+
     private boolean openUVCCamera(int fd) {
         try {
             uvcLoaded = true;
-            ols.init("uvc",null,fd);
+            ols.init("uvc", null, fd);
             runService();
         } catch (Exception e) {
             alertMe("Failed to open camera:" + e.toString());
@@ -94,53 +93,53 @@ public final class LiveStackerMain extends android.app.Activity
 
     private boolean openSIMCamera() {
         try {
-            ols.init("sim",this.simData,0);
-            Log.e("OLS","OLS Init done");
+            ols.init("sim", this.simData, 0);
+            Log.e("OLS", "OLS Init done");
             runService();
         } catch (Exception e) {
-            alertMe("Failed to open camera:" + e.toString() );
-            Log.e("OLS",Log.getStackTraceString(e));
+            alertMe("Failed to open camera:" + e.toString());
+            Log.e("OLS", Log.getStackTraceString(e));
             return false;
         }
         return true;
     }
 
     public interface USBOpener {
-        void open(Context context,UsbDevice device);
-    };
+        void open(Context context, UsbDevice device);
+    }
 
-    private void startUVCDevice(Context context,UsbDevice device)
-    {
+    ;
+
+    private void startUVCDevice(Context context, UsbDevice device) {
         UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
         UsbDeviceConnection connection = manager.openDevice(device);
         int fd = connection.getFileDescriptor();
 
         usbDevice = connection;
-        if(!openUVCCamera(fd)) {
-            Log.e("UVC","Opening failed, shutting down USB");
+        if (!openUVCCamera(fd)) {
+            Log.e("UVC", "Opening failed, shutting down USB");
             usbDevice.close();
-            Log.e("UVC","Opening failed, usbDevice is closed");
+            Log.e("UVC", "Opening failed, usbDevice is closed");
         }
         //call method to set up device communication
 
     }
-    private void startUVC()
-    {
+
+    private void startUVC() {
         usbAccess(new USBOpener() {
             @Override
-            public void open(Context context,UsbDevice device) {
-                startUVCDevice(context,device);
+            public void open(Context context, UsbDevice device) {
+                startUVCDevice(context, device);
             }
         });
 
     }
 
-    private void startASIDevice(Context context,UsbDevice device)
-    {
+    private void startASIDevice(Context context, UsbDevice device) {
         ASIUSBManager.initContext(context);
         ArrayList<String> cameras = ASIUSBManager.getCameraNameList();
-        for(int i=0;i<cameras.size();i++)
-            Log.e("OLS","dev="+cameras.get(i));
+        for (int i = 0; i < cameras.size(); i++)
+            Log.e("OLS", "dev=" + cameras.get(i));
 
         //int fd = connection.getFileDescriptor();*/
 
@@ -155,28 +154,28 @@ public final class LiveStackerMain extends android.app.Activity
         int fd = connection.getFileDescriptor();*/
 
         int N = ZwoCamera.getNumOfConnectedCameras();
-        Log.e("OLS","Devices = " + N);
+        Log.e("OLS", "Devices = " + N);
 
         int camId = 0;
         ZwoCamera camera = new ZwoCamera(camId);
-        Log.e("OLS","Camera created");
+        Log.e("OLS", "Camera created");
         ASIConstants.ASI_ERROR_CODE ret = camera.openCamera();
-        if(ret.intVal != ASI_SUCCESS)  {
-            Log.e("OLS",String.format("Failed to open ASI camera %d code=%d",camId,ret.intVal));
+        if (ret.intVal != ASI_SUCCESS) {
+            Log.e("OLS", String.format("Failed to open ASI camera %d code=%d", camId, ret.intVal));
             return;
         }
-        Log.e("OLS","Opened camera");
+        Log.e("OLS", "Opened camera");
         ASIReturnType r = ZwoCamera.getCameraProperty(camId);
-        if(r.getErrorCode().intVal != ASI_SUCCESS) {
+        if (r.getErrorCode().intVal != ASI_SUCCESS) {
             Log.e("OLS", "Failed to get properties for " + camId);
             return;
         }
-        ASICameraProperty prop = (ASICameraProperty)(r.getObj());
-        Log.e("OLS","Get camera prop id="  + prop.getCameraID());
+        ASICameraProperty prop = (ASICameraProperty) (r.getObj());
+        Log.e("OLS", "Get camera prop id=" + prop.getCameraID());
         camId = prop.getCameraID();
         try {
             asiLoaded = true;
-            ols.init("asi",null,camId);
+            ols.init("asi", null, camId);
             runService();
         } catch (Exception e) {
             alertMe("Failed to open camera:" + e.toString());
@@ -184,24 +183,22 @@ public final class LiveStackerMain extends android.app.Activity
         }
     }
 
-    private void startASI()
-    {
+    private void startASI() {
         usbAccess(new USBOpener() {
             @Override
-            public void open(Context context,UsbDevice device) {
-                startASIDevice(context,device);
+            public void open(Context context, UsbDevice device) {
+                startASIDevice(context, device);
             }
         });
     }
 
-    private void usbAccess(USBOpener opener)
-    {
+    private void usbAccess(USBOpener opener) {
         UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
         HashMap<String, UsbDevice> deviceList = manager.getDeviceList();
         UsbDevice firstDevice = null;
-        for(Map.Entry<String,UsbDevice> dev : deviceList.entrySet()) {
+        for (Map.Entry<String, UsbDevice> dev : deviceList.entrySet()) {
             UsbDevice device = dev.getValue();
-            if(firstDevice == null) {
+            if (firstDevice == null) {
                 firstDevice = device;
             }
         }
@@ -216,14 +213,14 @@ public final class LiveStackerMain extends android.app.Activity
 
                         if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
                             if (device != null) {
-                                if(uvcStartDone) {
-                                    Log.i("UVC","Usb IO already started");
+                                if (uvcStartDone) {
+                                    Log.i("UVC", "Usb IO already started");
                                     return;
                                 }
                                 uvcStartDone = true;
-                                Log.i("UVC","Starting USB Device");
+                                Log.i("UVC", "Starting USB Device");
 
-                                opener.open(context,device);
+                                opener.open(context, device);
                             }
                         } else {
                             alertMe("no permission denied for device " + device);
@@ -236,16 +233,66 @@ public final class LiveStackerMain extends android.app.Activity
         PendingIntent permissionIntent = PendingIntent.getBroadcast(this, 0, new Intent(ACTION_USB_PERMISSION), 0);
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
         registerReceiver(usbReceiver, filter);
-        if(firstDevice != null) {
+        if (firstDevice != null) {
             manager.requestPermission(firstDevice, permissionIntent);
         }
 
     }
-    protected @Override void onCreate( final android.os.Bundle activityState )
+
+    private static final int REQUEST_WRITE_STORAGE = 112;
+
+    boolean hasPerm()
     {
-        super.onCreate( activityState );
-        Log.i("UVC","onCreate:" + this.toString() );
+        boolean hasWPermission = (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED);
+        boolean hasRPermission = (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED);
+        return hasRPermission && hasWPermission;
+    }
+
+    protected @Override
+    void onCreate(final android.os.Bundle activityState) {
+        super.onCreate(activityState);
+        Log.i("UVC", "onCreate:" + this.toString());
         requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        if(hasPerm()) {
+            onCreateReal();
+        }
+        else {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{
+                            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                            Manifest.permission.READ_EXTERNAL_STORAGE
+                    },
+                    REQUEST_WRITE_STORAGE);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        switch (requestCode)
+        {
+            case REQUEST_WRITE_STORAGE: {
+                if (grantResults.length >= 2
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                        && grantResults[1] == PackageManager.PERMISSION_GRANTED)
+                {
+                    onCreateReal();
+                }
+                else
+                {
+                    alertMe("Failed to get permission");
+                }
+            }
+        }
+
+    }
+
+    void onCreateReal()
+    {
+        createDirs();
 
         if(ols == null) {
             ols = new OLSApi();
@@ -338,21 +385,31 @@ public final class LiveStackerMain extends android.app.Activity
                 });
         alertDialog.show();
     }
+
+
+    private void createDirs()
+    {
+        File dataDir = new File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+                "OpenLiveStacker");
+        this.dataDir = dataDir.getPath();
+        new File(this.dataDir).mkdirs();
+    }
+
     @SuppressLint("NewApi")
     private void configDirs()
     {
         try {
-            File dataDir = new File(
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-                    "OpenLiveStacker");
-            this.dataDir = dataDir.getPath();
-            new File(this.dataDir).mkdirs();
             ApplicationInfo appInfo = getApplicationInfo();
             this.libDir = appInfo.nativeLibraryDir;
 
+            PrintWriter writer = new PrintWriter(this.dataDir +"/tes.txt", "UTF-8");
+            writer.println("Hello");
+            writer.close();
 
             String[] pathnames;
             pathnames = (new File(this.libDir)).list();
+            Log.e("OLS","Reading " + this.libDir);
             for(String path: pathnames) {
                 Log.e("OLS","File in lib:" + path);
             }
