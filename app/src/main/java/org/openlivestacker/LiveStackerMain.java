@@ -14,7 +14,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.hardware.usb.UsbDeviceConnection;
 import android.location.Location;
 import android.location.LocationManager;
@@ -22,7 +21,6 @@ import android.net.Uri;
 import android.os.Environment;
 import android.util.Log;
 import android.view.View;
-import android.view.Window;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.LinearLayout;
@@ -50,7 +48,6 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.work.WorkManager;
@@ -188,18 +185,6 @@ public final class LiveStackerMain extends android.app.Activity {
         for (int i = 0; i < cameras.size(); i++)
             Log.e("OLS", "dev=" + cameras.get(i));
 
-        //int fd = connection.getFileDescriptor();*/
-
-/*        int N =  ZwoCamera.getNumOfConnectedCameras();
-        if(N <= 0) {
-            alertMe("No cameras found");
-            return;
-        }*/
-
-/*         UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
-        UsbDeviceConnection connection = manager.openDevice(device);
-        int fd = connection.getFileDescriptor();*/
-
         int N = ZwoCamera.getNumOfConnectedCameras();
         Log.e("OLS", "Devices = " + N);
 
@@ -286,8 +271,7 @@ public final class LiveStackerMain extends android.app.Activity {
 
     }
 
-    private static final int REQUEST_WRITE_STORAGE = 112;
-    private static final int REQUEST_GEOLOCATION = 113;
+    private static final int REQUEST_PERMISSIONS = 112;
 
     boolean hasPerm()
     {
@@ -295,36 +279,15 @@ public final class LiveStackerMain extends android.app.Activity {
                 Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED);
         boolean hasRPermission = (ContextCompat.checkSelfPermission(this,
                 Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED);
-        return hasRPermission && hasWPermission;
-    }
-
-    void checkLocationPermAndGetLocation()
-    {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            ActivityCompat.requestPermissions(this,
-                    new String[]{
-                            Manifest.permission.ACCESS_FINE_LOCATION
-                    },
-                    REQUEST_GEOLOCATION);
-
-            return;
-        }
-        getLocation();
+        boolean hasLPermission = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED;
+        return hasRPermission && hasWPermission && hasLPermission;
     }
 
     protected @Override
     void onCreate(final android.os.Bundle activityState) {
         super.onCreate(activityState);
         Log.i("UVC", "onCreate:" + this.toString());
-
-        checkLocationPermAndGetLocation();
 
         if(hasPerm()) {
             onCreateReal();
@@ -333,37 +296,61 @@ public final class LiveStackerMain extends android.app.Activity {
             ActivityCompat.requestPermissions(this,
                     new String[]{
                             Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                            Manifest.permission.READ_EXTERNAL_STORAGE
+                            Manifest.permission.READ_EXTERNAL_STORAGE,
+                            Manifest.permission.ACCESS_FINE_LOCATION
                     },
-                    REQUEST_WRITE_STORAGE);
+                    REQUEST_PERMISSIONS);
         }
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        switch (requestCode)
-        {
-            case REQUEST_WRITE_STORAGE: {
-                if (grantResults.length >= 2
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED
-                        && grantResults[1] == PackageManager.PERMISSION_GRANTED)
-                {
-                    onCreateReal();
+        if(requestCode == REQUEST_PERMISSIONS) {
+            int storageGranted = 0;
+            boolean gpsGranted = false;
+            for(int i=0;i<grantResults.length;i++) {
+                Log.i("OLS","Got permission " + permissions[i] + " status " + grantResults[i]);
+                if(grantResults[i] == PackageManager.PERMISSION_GRANTED) {
+                    if(permissions[i].equals(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                       || permissions[i].equals(Manifest.permission.READ_EXTERNAL_STORAGE))
+                    {
+                        storageGranted++;
+                    }
+                    else if(permissions[i].equals(Manifest.permission.ACCESS_FINE_LOCATION)) {
+                        gpsGranted = true;
+                    }
                 }
-                else
-                {
-                    alertMe("Failed to get permission");
-                }
+
             }
-            case REQUEST_GEOLOCATION: {
-                if (grantResults.length >= 1 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    getLocation();
-                }
-                break;
+            if(gpsGranted)
+                getLocation();
+            if(storageGranted == 2) {
+                onCreateReal();
+            }
+            else {
+                onCreateFail();
             }
         }
+    }
 
+    void onCreateFail()
+    {
+        layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        Button exit = new Button(this);
+        exit.setText("Exit - No Permissions");
+        exit.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View view) {
+                NotificationManager notificationManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+                notificationManager.cancelAll();
+                finishAndRemoveTask();
+                System.exit(0);
+            }
+        });
+
+        layout.addView(exit);
+        setContentView(layout);
     }
 
     void onCreateReal()
@@ -478,9 +465,11 @@ public final class LiveStackerMain extends android.app.Activity {
     private void createDirs()
     {
         File dataDir = new File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
                 "OpenLiveStacker");
         this.dataDir = dataDir.getPath();
+        dataDir.mkdirs();
+
         new File(this.dataDir).mkdirs();
     }
 
@@ -491,9 +480,6 @@ public final class LiveStackerMain extends android.app.Activity {
             ApplicationInfo appInfo = getApplicationInfo();
             this.libDir = appInfo.nativeLibraryDir;
 
-            PrintWriter writer = new PrintWriter(this.dataDir +"/tes.txt", "UTF-8");
-            writer.println("Hello");
-            writer.close();
 
             String[] pathnames;
             pathnames = (new File(this.libDir)).list();
@@ -510,6 +496,11 @@ public final class LiveStackerMain extends android.app.Activity {
                 ols.setDirs(this.wwwData, this.dataDir, this.libDir);
             }
             Log.e("OLS", "WWW-Data:" + this.wwwData);
+            /*
+                PrintWriter writer = new PrintWriter(this.dataDir +"/tes.txt", "UTF-8");
+                writer.println("Hello");
+                writer.close();
+            */
         }
         catch(IOException e) {
             Log.e("OLS","files halding failed" + e.getMessage());
