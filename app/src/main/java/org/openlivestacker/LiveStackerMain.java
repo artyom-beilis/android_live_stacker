@@ -1,4 +1,5 @@
 package org.openlivestacker;
+
 import static android.app.PendingIntent.getActivity;
 import static com.zwo.ASIConstants.ASI_ERROR_CODE.ASI_SUCCESS;
 
@@ -13,13 +14,17 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.hardware.usb.UsbDeviceConnection;
+import android.location.Location;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Environment;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.hardware.usb.UsbManager;
 import android.hardware.usb.UsbDevice;
@@ -39,6 +44,7 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import java.util.concurrent.ExecutorService;
@@ -58,9 +64,10 @@ public final class LiveStackerMain extends android.app.Activity {
     ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     private void setButtonStatus() {
-        openUVCDevice.setEnabled(!olsActive && !asiLoaded);
-        openASIDevice.setEnabled(!olsActive && !uvcLoaded);
-        openSIMDevice.setEnabled(!olsActive);
+        openUVCDevice.setVisibility((!olsActive && !asiLoaded) ? View.VISIBLE : View.GONE);
+        openASIDevice.setVisibility((!olsActive && !uvcLoaded) ? View.VISIBLE : View.GONE);
+        openSIMDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
+        reopenView.setVisibility(olsActive ? View.VISIBLE : View.GONE);
     }
 
 
@@ -74,7 +81,47 @@ public final class LiveStackerMain extends android.app.Activity {
             Thread.sleep(500);
         } catch (Exception e) {
         }
-        Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("http://127.0.0.1:8080/"));
+        openUI();
+    }
+
+    private void getLocation() {
+        LocationManager lm = (LocationManager) getSystemService(
+                Context.LOCATION_SERVICE);
+        List<String> providers = lm.getProviders(true);
+        for (String name : providers) {
+            Location l = lm.getLastKnownLocation(name);
+            if(l!=null) {
+                lat = l.getLatitude();
+                lon = l.getLongitude();
+                return;
+            }
+        }
+    }
+
+    private void openUI()
+    {
+        String extra = "";
+        boolean useAndroidView = !useBrowserBox.isChecked();
+        if(lat != -1000 && lon != -1000) {
+            extra = String.format("?lat=%4.2f&lon=%4.2f",lat,lon);
+        }
+        if(useAndroidView) {
+            if(extra.equals(""))
+                extra+="?";
+            else
+                extra+="&";
+            extra +="android_view=1";
+        }
+        String uri = "http://127.0.0.1:8080/" + extra;
+
+        Intent browserIntent;
+        if(useBrowserBox.isChecked()) {
+            browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
+        }
+        else {
+            browserIntent = new Intent(this, WViewActivity.class);
+            browserIntent.putExtra("uri",uri);
+        }
         startActivity(browserIntent);
     }
 
@@ -240,6 +287,7 @@ public final class LiveStackerMain extends android.app.Activity {
     }
 
     private static final int REQUEST_WRITE_STORAGE = 112;
+    private static final int REQUEST_GEOLOCATION = 113;
 
     boolean hasPerm()
     {
@@ -250,11 +298,33 @@ public final class LiveStackerMain extends android.app.Activity {
         return hasRPermission && hasWPermission;
     }
 
+    void checkLocationPermAndGetLocation()
+    {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            ActivityCompat.requestPermissions(this,
+                    new String[]{
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                    },
+                    REQUEST_GEOLOCATION);
+
+            return;
+        }
+        getLocation();
+    }
+
     protected @Override
     void onCreate(final android.os.Bundle activityState) {
         super.onCreate(activityState);
         Log.i("UVC", "onCreate:" + this.toString());
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        checkLocationPermAndGetLocation();
 
         if(hasPerm()) {
             onCreateReal();
@@ -286,6 +356,12 @@ public final class LiveStackerMain extends android.app.Activity {
                     alertMe("Failed to get permission");
                 }
             }
+            case REQUEST_GEOLOCATION: {
+                if (grantResults.length >= 1 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    getLocation();
+                }
+                break;
+            }
         }
 
     }
@@ -300,7 +376,7 @@ public final class LiveStackerMain extends android.app.Activity {
         }
         configDirs();
 
-        LinearLayout layout = new LinearLayout(this);
+        layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
 
         openUVCDevice = new Button(this);
@@ -330,6 +406,21 @@ public final class LiveStackerMain extends android.app.Activity {
         });
         layout.addView(openSIMDevice);
 
+        useBrowserBox = new CheckBox(this);
+        useBrowserBox.setText("Use External Browser");
+        layout.addView(useBrowserBox);
+
+        reopenView = new Button(this);
+        reopenView.setText("Live View");
+        reopenView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                openUI();
+            }
+        });
+
+        layout.addView(reopenView);
+
         Button exit = new Button(this);
         exit.setText("Close and Exit");
         exit.setOnClickListener(new View.OnClickListener() {
@@ -347,10 +438,7 @@ public final class LiveStackerMain extends android.app.Activity {
         });
 
         layout.addView(exit);
-
-
         setButtonStatus();
-
         setContentView(layout);
 
     }
@@ -417,8 +505,8 @@ public final class LiveStackerMain extends android.app.Activity {
             this.wwwData = appInfo.dataDir + "/www-data";
             this.simData = appInfo.dataDir + "/sim-data";
             if(!dirsReady) {
-                copyFolder("www-data", this.wwwData);
-                copyFolder("sim-data", this.simData);
+                copyFolder("www-data", this.wwwData,true);
+                copyFolder("sim-data", this.simData,false);
                 ols.setDirs(this.wwwData, this.dataDir, this.libDir);
             }
             Log.e("OLS", "WWW-Data:" + this.wwwData);
@@ -428,16 +516,19 @@ public final class LiveStackerMain extends android.app.Activity {
         }
         dirsReady = true;
     }
-    public void copyFolder(String src, String dst) throws IOException
+    public void copyFolder(String src, String dst,boolean forceOverwrite) throws IOException
     {
         boolean result = true;
         String files[] = getAssets().list(src);
         if (files == null)
             return;
         if (files.length == 0) {
+            File dstFile = new File(dst);
             Log.e("OLS","Copy file from " + src + " to " + dst);
+            if(!forceOverwrite && dstFile.exists())
+                return;
             try (InputStream in = getAssets().open(src);
-                 OutputStream out = new FileOutputStream(new File(dst)))
+                 OutputStream out = new FileOutputStream(dstFile))
             {
                 byte[] buffer = new byte[4096];
                 int N;
@@ -448,12 +539,15 @@ public final class LiveStackerMain extends android.app.Activity {
         } else {
             new File(dst).mkdirs();
             for (String file : files) {
-                copyFolder(src + "/" + file,dst + "/" + file);
+                copyFolder(src + "/" + file,dst + "/" + file,forceOverwrite);
             }
         }
     }
 
     private Button openUVCDevice, openASIDevice, openSIMDevice;
+    private Button reopenView;
+    private CheckBox useBrowserBox;
+    private LinearLayout layout;
 
     private String wwwData;
     private String simData;
@@ -465,7 +559,10 @@ public final class LiveStackerMain extends android.app.Activity {
     static private boolean olsActive = false;
     static private boolean uvcLoaded = false;
     static private boolean asiLoaded = false;
+    static double lat = -1000;
+    static double lon = -1000;
 
     static protected OLSApi ols;
     static boolean dirsReady = false;
+
 };

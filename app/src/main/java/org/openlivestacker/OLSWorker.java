@@ -52,6 +52,7 @@ public class OLSWorker extends Worker {
             }
         });
         runThread.start();
+        //setRunInForeground(true);
         while (runThread.isAlive()) {
             int count = LiveStackerMain.ols.getFramesCount();
             seconds++;
