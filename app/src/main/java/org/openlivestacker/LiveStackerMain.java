@@ -15,10 +15,16 @@ import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.hardware.usb.UsbDeviceConnection;
+import android.location.Criteria;
 import android.location.Location;
+import android.location.LocationListener;
 import android.location.LocationManager;
+import android.location.LocationProvider;
+import android.location.LocationRequest;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Environment;
+import android.renderscript.RenderScript;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -48,7 +54,9 @@ import java.util.Map;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
+import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.work.WorkManager;
@@ -82,10 +90,13 @@ public final class LiveStackerMain extends android.app.Activity {
         openUI();
     }
 
+    @SuppressLint("MissingPermission")
     private void getLocation() {
         LocationManager lm = (LocationManager) getSystemService(
                 Context.LOCATION_SERVICE);
+
         List<String> providers = lm.getProviders(true);
+        Log.i("OLS","Providers " + providers.toString());
         for (String name : providers) {
             Location l = lm.getLastKnownLocation(name);
             if(l!=null) {
@@ -93,6 +104,19 @@ public final class LiveStackerMain extends android.app.Activity {
                 lon = l.getLongitude();
                 return;
             }
+        }
+        if(providers.size() > 0) {
+            Log.i("OLS","No last known location, requesting update");
+            Criteria criteria = new Criteria();
+            criteria.setAccuracy(Criteria.ACCURACY_FINE);
+            lm.requestSingleUpdate(criteria, new LocationListener() {
+                @Override
+                public void onLocationChanged(@NonNull Location l) {
+                    lat = l.getLatitude();
+                    lon = l.getLongitude();
+                    Log.i("OLS",String.format("Got geolocation lat=%4.2f lon=%4.2f",lat,lon));
+                }
+            },null);
         }
     }
 
