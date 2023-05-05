@@ -26,6 +26,6 @@
                 <action android:name='android.intent.action.MAIN'/>
                 </intent-filter>
             </activity>
-        <activity android:name="org.openlivestacker.WViewActivity" />
+        <activity android:name="org.openlivestacker.WViewActivity" android:configChanges="orientation|screenSize" />
     </application>
 </manifest>

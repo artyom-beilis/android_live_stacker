@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -118,6 +119,8 @@ public final class LiveStackerMain extends android.app.Activity {
         else {
             browserIntent = new Intent(this, WViewActivity.class);
             browserIntent.putExtra("uri",uri);
+            browserIntent.putExtra("FS","yes");
+
         }
         startActivity(browserIntent);
     }
@@ -290,6 +293,7 @@ public final class LiveStackerMain extends android.app.Activity {
         Log.i("UVC", "onCreate:" + this.toString());
 
         if(hasPerm()) {
+            getLocation();
             onCreateReal();
         }
         else {
@@ -355,7 +359,22 @@ public final class LiveStackerMain extends android.app.Activity {
 
     void onCreateReal()
     {
-        createDirs();
+        if(!accessFailed) {
+            Log.i("OLS","Creating initial working directories");
+            if(!createDirs()) {
+                accessFailed = true;
+                Intent intent = new Intent(this, WViewActivity.class);
+                intent.putExtra("uri","file:///android_asset/android_ols_permission.html");
+                intent.putExtra("FS","no");
+                startActivity(intent);
+                onCreateFail();
+                return;
+            }
+        }
+        else {
+            onCreateFail();
+            return;
+        }
 
         if(ols == null) {
             ols = new OLSApi();
@@ -462,15 +481,32 @@ public final class LiveStackerMain extends android.app.Activity {
     }
 
 
-    private void createDirs()
+    private boolean createDirs()
     {
         File dataDir = new File(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
                 "OpenLiveStacker");
         this.dataDir = dataDir.getPath();
         dataDir.mkdirs();
+        File index = new File(this.dataDir + "/calibration/index.json");
+        if(!index.exists() || index.canWrite())
+            return true;
+        return false;
+        /*Log.i("OLS","File " + index.toString() + "exists checking ability to write");
+        try {
+            FileOutputStream out = new FileOutputStream(index,true);
+            out.write(" ".getBytes(StandardCharsets.UTF_8));
+            out.flush();
+            out.close();
+            Log.i("OLS","Updated file succesefully");
+        }
+        catch(IOException e) {
+            Log.e("OLS","Access error" + e.getMessage());
+            return false;
+        }
+        return true;
+        */
 
-        new File(this.dataDir).mkdirs();
     }
 
     @SuppressLint("NewApi")
@@ -555,5 +591,6 @@ public final class LiveStackerMain extends android.app.Activity {
 
     static protected OLSApi ols;
     static boolean dirsReady = false;
+    static boolean accessFailed = false;
 
 };
