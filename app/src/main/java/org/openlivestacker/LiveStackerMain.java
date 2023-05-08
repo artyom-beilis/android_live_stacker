@@ -5,15 +5,19 @@ import static com.zwo.ASIConstants.ASI_ERROR_CODE.ASI_SUCCESS;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.appsearch.StorageInfo;
 import android.content.BroadcastReceiver;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.hardware.usb.UsbDeviceConnection;
 import android.location.Criteria;
 import android.location.Location;
@@ -24,6 +28,10 @@ import android.location.LocationRequest;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.os.storage.StorageManager;
+import android.os.storage.StorageVolume;
+import android.provider.DocumentsContract;
+import android.provider.OpenableColumns;
 import android.renderscript.RenderScript;
 import android.util.Log;
 import android.view.View;
@@ -40,18 +48,22 @@ import com.zwo.ASIReturnType;
 import com.zwo.ASIUSBManager;
 import com.zwo.ZwoCamera;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -74,6 +86,8 @@ public final class LiveStackerMain extends android.app.Activity {
         openASIDevice.setVisibility((!olsActive && !uvcLoaded) ? View.VISIBLE : View.GONE);
         openSIMDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         reopenView.setVisibility(olsActive ? View.VISIBLE : View.GONE);
+        if(useSDCard!=null)
+            useSDCard.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
     }
 
 
@@ -299,6 +313,7 @@ public final class LiveStackerMain extends android.app.Activity {
     }
 
     private static final int REQUEST_PERMISSIONS = 112;
+    private static final int IMPORT_CALIBRATION_FRAMES = 113;
 
     boolean hasPerm()
     {
@@ -358,6 +373,45 @@ public final class LiveStackerMain extends android.app.Activity {
             }
             else {
                 onCreateFail();
+            }
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data)
+    {
+        super.onActivityResult(requestCode, resultCode, data);
+        if(requestCode == IMPORT_CALIBRATION_FRAMES) {
+            if(data!=null && resultCode == Activity.RESULT_OK) {
+                Uri uri = data.getData();
+                final int takeFlags = data.getFlags()
+                        & (Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                getContentResolver().takePersistableUriPermission(uri, takeFlags);
+                Uri newUri = Uri.parse(uri.toString() + "%2Findex.json");
+                try {
+                    String r = readTextFromUri(newUri);
+                    Log.e("OLS","Got content:" + r);
+                }
+                catch(IOException e) {
+                    Log.e("OLS","Failed to read " + newUri);
+                }
+
+                Log.e("OLS","Resilt" + uri.getAuthority());
+                Log.e("OLS","Result: " + uri.getPath());
+                if(uri.getAuthority().equals("com.android.externalstorage.documents")) {
+                    String[] parts = uri.getPath().split(":");
+                    if(parts.length != 2) {
+                        alertMe("Something wrong with the path can't use");
+                    }
+                    else {
+                        importCalibrationFrames(Environment.getExternalStorageDirectory() + "/" + parts[1]);
+                    }
+                }
+                else {
+                    alertMe("Can't access non-storage location");
+                }
+                onCreateReal();
             }
         }
     }
@@ -436,6 +490,23 @@ public final class LiveStackerMain extends android.app.Activity {
         });
         layout.addView(openSIMDevice);
 
+        if(hasSDCard) {
+            useSDCard = new CheckBox(this);
+            useSDCard.setText("Use Extrnal SD Card");
+            useSDCard.setChecked(getVolumeId() > 0);
+            useSDCard.setOnClickListener(new View.OnClickListener() {
+                     @Override
+                     public void onClick(View view) {
+                         setVolumeId( useSDCard.isChecked() ? 1 : 0);
+                         if(!createDirs())
+                             return;
+                         configDirs();
+                     }
+                 }
+            );
+            layout.addView(useSDCard);
+        }
+
         useBrowserBox = new CheckBox(this);
         useBrowserBox.setText("Use External Browser");
         layout.addView(useBrowserBox);
@@ -466,13 +537,70 @@ public final class LiveStackerMain extends android.app.Activity {
                 System.exit(0);
             }
         });
-
         layout.addView(exit);
+
+        //if(enableImportCalibration) {
+        if(false) {
+            Button importCalib = new Button(this);
+            importCalib.setText("Import Calibration Frames");
+            importCalib.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View view) {
+                    Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    i.setFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                    //i.addCategory(Intent.CATEGORY_DEFAULT);
+                    startActivityForResult(Intent.createChooser(i, "Choose calibration directory"),
+                            IMPORT_CALIBRATION_FRAMES);
+                }
+            });
+            layout.addView(importCalib);
+        }
+
         setButtonStatus();
         setContentView(layout);
 
     }
 
+    private String readTextFromUri(Uri uri) throws IOException {
+        StringBuilder stringBuilder = new StringBuilder();
+        try (InputStream inputStream =
+                     getContentResolver().openInputStream(uri);
+             BufferedReader reader = new BufferedReader(
+                     new InputStreamReader(Objects.requireNonNull(inputStream)))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                stringBuilder.append(line);
+            }
+        }
+        return stringBuilder.toString();
+    }
+
+    void importCalibrationFrames(String calibDir)
+    {
+        File indx = new File(calibDir,"index.json");
+        if(!indx.exists()) {
+            alertMe("No index.json in the selected directory");
+            return;
+        }
+        if(!indx.canRead()) {
+            alertMe("No access permissions to index.json in the selected directory");
+            return;
+        }
+        try {
+            String target = this.dataDir + "/calibration";
+            (new File(target)).mkdirs();
+            String[] pathnames = (new File(calibDir)).list();
+            Log.e("OLS", "!!!!! Getting files from " + calibDir + " to " + target);
+            for (String path : pathnames) {
+                Log.i("OLS","copying " + path);
+                Files.copy((new File(calibDir, path)).toPath(),
+                        (new File(target, path)).toPath());
+            }
+        }
+        catch(IOException e) {
+            alertMe("Failed to copy calibration files:" + e.getMessage());
+        }
+    }
     void stopAll()
     {
         try {
@@ -504,33 +632,72 @@ public final class LiveStackerMain extends android.app.Activity {
         alertDialog.show();
     }
 
+    List<String> listExternalVolumes()
+    {
+        List<String> paths = new ArrayList<>();
+        paths.add(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).toString());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            StorageManager manager = (StorageManager) getSystemService(STORAGE_SERVICE);
+            List<StorageVolume> volumes = manager.getStorageVolumes();
+            for(StorageVolume v:volumes) {
+                if(v.isPrimary())
+                    continue;
+                if(v.getDirectory()!=null) {
+                    paths.add(v.getDirectory().getPath() + "/Documents");
+                }
+            }
+        }
+        else {
+            File[] edirs = getExternalFilesDirs(null);
+            for (int i=1;i<edirs.length;i++) {
+                if(edirs[i]==null)
+                    continue;
+                String path = edirs[i].toString();
+                paths.add(path + "/data");
+            }
+        }
+
+        hasSDCard = paths.size() > 1;
+        for(String p: paths)
+            Log.e("OLS","Avalible path: " + p);
+        return paths;
+    }
+
+    int getVolumeId()
+    {
+        SharedPreferences sp = getSharedPreferences("config",0);
+        return sp.getInt("volume",0);
+    }
+    void setVolumeId(int id)
+    {
+        SharedPreferences.Editor sp = getSharedPreferences("config",0).edit();
+        sp.putInt("volume", id);
+        sp.commit();
+    }
 
     private boolean createDirs()
     {
-        File dataDir = new File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-                "OpenLiveStacker");
+        List<String> dataDirs = listExternalVolumes();
+
+        int id = getVolumeId();
+        String path = dataDirs.get(0);
+        if(id > 0 && id < dataDirs.size()) {
+            path = dataDirs.get(id);
+        }
+
+        File dataDir = new File(path,"OpenLiveStacker");
         this.dataDir = dataDir.getPath();
         dataDir.mkdirs();
+        Log.i("OLS","Working Directory = " + this.dataDir);
         File index = new File(this.dataDir + "/calibration/index.json");
-        if(!index.exists() || index.canWrite())
+        if(!index.exists()) {
+            enableImportCalibration = true;
             return true;
+        }
+        if(index.canWrite())
+            return true;
+        Log.e("OLS","Access issue detected");
         return false;
-        /*Log.i("OLS","File " + index.toString() + "exists checking ability to write");
-        try {
-            FileOutputStream out = new FileOutputStream(index,true);
-            out.write(" ".getBytes(StandardCharsets.UTF_8));
-            out.flush();
-            out.close();
-            Log.i("OLS","Updated file succesefully");
-        }
-        catch(IOException e) {
-            Log.e("OLS","Access error" + e.getMessage());
-            return false;
-        }
-        return true;
-        */
-
     }
 
     @SuppressLint("NewApi")
@@ -553,14 +720,10 @@ public final class LiveStackerMain extends android.app.Activity {
             if(!dirsReady) {
                 copyFolder("www-data", this.wwwData,true);
                 copyFolder("sim-data", this.simData,false);
-                ols.setDirs(this.wwwData, this.dataDir, this.libDir);
             }
             Log.e("OLS", "WWW-Data:" + this.wwwData);
-            /*
-                PrintWriter writer = new PrintWriter(this.dataDir +"/tes.txt", "UTF-8");
-                writer.println("Hello");
-                writer.close();
-            */
+            ols.setDirs(this.wwwData, this.dataDir, this.libDir);
+            Log.i("OLS","www=" + wwwData + " data=" + dataDir + " lib=" + libDir);
         }
         catch(IOException e) {
             Log.e("OLS","files halding failed" + e.getMessage());
@@ -598,6 +761,7 @@ public final class LiveStackerMain extends android.app.Activity {
     private Button openUVCDevice, openASIDevice, openSIMDevice;
     private Button reopenView;
     private CheckBox useBrowserBox;
+    private CheckBox useSDCard;
     private LinearLayout layout;
 
     private String wwwData;
@@ -616,5 +780,7 @@ public final class LiveStackerMain extends android.app.Activity {
     static protected OLSApi ols;
     static boolean dirsReady = false;
     static boolean accessFailed = false;
+    boolean enableImportCalibration = false;
+    boolean hasSDCard = false;
 
 };

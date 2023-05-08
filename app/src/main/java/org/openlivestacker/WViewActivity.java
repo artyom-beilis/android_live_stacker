@@ -69,7 +69,7 @@ public class WViewActivity extends android.app.Activity {
 
         setUIVisibility();
 
-        view = new WebView(getApplicationContext());
+        view = new WebView(this);
         if(activityState != null) {
             view.restoreState(activityState);
         }
@@ -77,6 +77,9 @@ public class WViewActivity extends android.app.Activity {
             view.getSettings().setJavaScriptEnabled(true);
             view.getSettings().setDomStorageEnabled(true);
             view.getSettings().setDatabaseEnabled(true);
+            view.getSettings().setBuiltInZoomControls(true);
+            view.getSettings().setSupportZoom(true);
+            view.getSettings().setDisplayZoomControls(false);
             String uri= getIntent().getExtras().getString("uri");
             view.loadUrl(uri);
         }
