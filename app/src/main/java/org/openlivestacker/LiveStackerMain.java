@@ -404,7 +404,7 @@ public final class LiveStackerMain extends android.app.Activity {
 
     String prettyDataDirName()
     {
-        int pos = dataDir.indexOf("/Android/data");
+        int pos = dataDir.indexOf("/Android/media");
         int olsPos = dataDir.indexOf("/OpenLiveStacker");
         if(pos == -1)
             return "Data Location:\n" + dataDir;
@@ -544,7 +544,7 @@ public final class LiveStackerMain extends android.app.Activity {
     List<String> listExternalVolumes()
     {
         List<String> paths = new ArrayList<>();
-        File[] edirs = getExternalFilesDirs(null);
+        File[] edirs = getExternalMediaDirs();
         for (int i=0;i<edirs.length;i++) {
             if(edirs[i]==null)
                 continue;
