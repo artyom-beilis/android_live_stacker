@@ -5,11 +5,9 @@ import static com.zwo.ASIConstants.ASI_ERROR_CODE.ASI_SUCCESS;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.app.appsearch.StorageInfo;
 import android.content.BroadcastReceiver;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -17,22 +15,12 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
 import android.hardware.usb.UsbDeviceConnection;
 import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
-import android.location.LocationProvider;
-import android.location.LocationRequest;
 import android.net.Uri;
-import android.os.Build;
-import android.os.Environment;
-import android.os.storage.StorageManager;
-import android.os.storage.StorageVolume;
-import android.provider.DocumentsContract;
-import android.provider.OpenableColumns;
-import android.renderscript.RenderScript;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -49,35 +37,27 @@ import com.zwo.ASIReturnType;
 import com.zwo.ASIUSBManager;
 import com.zwo.ZwoCamera;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.PrintWriter;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Consumer;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import androidx.work.WorkManager;
 import androidx.work.OneTimeWorkRequest;
 
 public final class LiveStackerMain extends android.app.Activity {
     private static final String ACTION_USB_PERMISSION =
-            "com.android.example.USB_PERMISSION";
+            "org.openlivestacker.USB_PERMISSION";
     private BroadcastReceiver usbReceiver = null;
 
     ExecutorService executorService = Executors.newSingleThreadExecutor();
@@ -197,6 +177,7 @@ public final class LiveStackerMain extends android.app.Activity {
     ;
 
     private void startUVCDevice(Context context, UsbDevice device) {
+
         UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
         UsbDeviceConnection connection = manager.openDevice(device);
         int fd = connection.getFileDescriptor();
@@ -211,14 +192,27 @@ public final class LiveStackerMain extends android.app.Activity {
 
     }
 
-    private void startUVC() {
+    private void startUVCWithCamPerm()
+    {
         usbAccess(new USBOpener() {
             @Override
             public void open(Context context, UsbDevice device) {
                 startUVCDevice(context, device);
             }
         });
+    }
 
+    private void startUVC() {
+        if(hasCameraPerm()) {
+            startUVCWithCamPerm();
+        }
+        else {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{
+                            Manifest.permission.CAMERA
+                    },
+                    REQUEST_CAMERA_FOR_UVC);
+        }
     }
 
     private void startASIDevice(Context context, UsbDevice device) {
@@ -276,15 +270,18 @@ public final class LiveStackerMain extends android.app.Activity {
                 firstDevice = device;
             }
         }
+        if (firstDevice == null) {
+            alertMe("No USB Devices Connected");
+            return;
+        }
 
-        usbReceiver = new BroadcastReceiver() {
+        usbReceiver = usbReceiver != null ? usbReceiver : new BroadcastReceiver() {
 
             public void onReceive(Context context, Intent intent) {
                 String action = intent.getAction();
                 if (ACTION_USB_PERMISSION.equals(action)) {
                     synchronized (this) {
                         UsbDevice device = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-
                         if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
                             if (device != null) {
                                 if (uvcStartDone) {
@@ -297,29 +294,34 @@ public final class LiveStackerMain extends android.app.Activity {
                                 opener.open(context, device);
                             }
                         } else {
-                            alertMe("no permission denied for device " + device);
+                            alertMe("Permission denied for device " + device.getProductName());
                         }
                     }
                 }
             }
         };
 
-        PendingIntent permissionIntent = PendingIntent.getBroadcast(this, 0, new Intent(ACTION_USB_PERMISSION), 0);
+        PendingIntent permissionIntent = PendingIntent.getBroadcast(this, REQUEST_USB_ACCESS, new Intent(ACTION_USB_PERMISSION), 0);
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
         registerReceiver(usbReceiver, filter);
-        if (firstDevice != null) {
-            manager.requestPermission(firstDevice, permissionIntent);
-        }
-
+        manager.requestPermission(firstDevice, permissionIntent);
     }
 
     private static final int REQUEST_PERMISSIONS = 112;
-    private static final int IMPORT_CALIBRATION_FRAMES = 113;
+    private static final int REQUEST_CAMERA_FOR_UVC = 113;
+    private static final int REQUEST_USB_ACCESS = 111;
 
     boolean hasPerm()
     {
         boolean hasLPermission = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
+        return hasLPermission;
+    }
+
+    boolean hasCameraPerm()
+    {
+        boolean hasLPermission =
+                (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED);
         return hasLPermission;
     }
 
@@ -350,6 +352,14 @@ public final class LiveStackerMain extends android.app.Activity {
                && permissions[0].equals(Manifest.permission.ACCESS_FINE_LOCATION))
             {
                 getLocation();
+            }
+        }
+        else if(requestCode == REQUEST_CAMERA_FOR_UVC) {
+            if(grantResults.length >= 1
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                    && permissions[0].equals(Manifest.permission.CAMERA))
+            {
+                startUVCWithCamPerm();
             }
         }
     }
