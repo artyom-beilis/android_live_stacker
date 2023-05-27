@@ -1,10 +1,14 @@
 package org.openlivestacker;
 
+import android.content.Context;
 import android.os.Bundle;
+import android.text.InputType;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 import android.webkit.GeolocationPermissions;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
@@ -13,6 +17,23 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
 public class WViewActivity extends android.app.Activity {
+
+    static class WebViewPlus extends WebView {
+        WebViewPlus(Context ctx)
+        {
+            super(ctx);
+        }
+        @Override
+        public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+            InputConnection connection = super.onCreateInputConnection(outAttrs);
+            if ((outAttrs.inputType & InputType.TYPE_CLASS_NUMBER) != 0)
+            {
+                outAttrs.inputType |= InputType.TYPE_NUMBER_FLAG_DECIMAL;
+                outAttrs.inputType |= InputType.TYPE_NUMBER_FLAG_SIGNED;
+            }
+            return connection;
+        }
+    };
 
     @Override
     protected void onSaveInstanceState(Bundle outState)
@@ -56,8 +77,8 @@ public class WViewActivity extends android.app.Activity {
         windowInsetsController.setSystemBarsBehavior(
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         );
-
     }
+
 
     protected @Override
     void onCreate(final android.os.Bundle activityState) {
@@ -69,7 +90,7 @@ public class WViewActivity extends android.app.Activity {
 
         setUIVisibility();
 
-        view = new WebView(this);
+        view = new WebViewPlus(this);
         if(activityState != null) {
             view.restoreState(activityState);
         }
