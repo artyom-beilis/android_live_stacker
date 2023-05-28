@@ -22,6 +22,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.Uri;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -29,6 +30,7 @@ import android.widget.LinearLayout;
 import android.hardware.usb.UsbManager;
 import android.hardware.usb.UsbDevice;
 import android.content.Context;
+import android.widget.Space;
 import android.widget.TextView;
 
 import com.zwo.ASICameraProperty;
@@ -447,43 +449,64 @@ public final class LiveStackerMain extends android.app.Activity {
 
         configDirs();
 
+        LinearLayout.LayoutParams defW = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,  0.0f
+        );
+        LinearLayout.LayoutParams devW = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT,  1.0f
+        );
+        LinearLayout.LayoutParams spaceW = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,  1.0f
+        );
+
         layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
 
+        LinearLayout devices = new LinearLayout(this);
+        devices.setOrientation(LinearLayout.HORIZONTAL);
+        devices.setLayoutParams(defW);
+
         openUVCDevice = new Button(this);
-        openUVCDevice.setText("UVC Device");
+        openUVCDevice.setLayoutParams(devW);
+        openUVCDevice.setText("UVC");
         openUVCDevice.setOnClickListener(new View.OnClickListener() {
             public void onClick(View view) {
                 startUVC();
             }
         });
-        layout.addView(openUVCDevice);
+        devices.addView(openUVCDevice);
 
         openASIDevice = new Button(this);
-        openASIDevice.setText("ASI Device");
+        openASIDevice.setLayoutParams(devW);
+        openASIDevice.setText("ASI");
         openASIDevice.setOnClickListener(new View.OnClickListener() {
             public void onClick(View view) {
                 startASI();
             }
         });
-        layout.addView(openASIDevice);
+        devices.addView(openASIDevice);
+
 
         openSIMDevice = new Button(this);
-        openSIMDevice.setText("Simulated Device");
+        openSIMDevice.setLayoutParams(devW);
+        openSIMDevice.setText("Sim.");
         openSIMDevice.setOnClickListener(new View.OnClickListener() {
             public void onClick(View view) {
                 openSIMCamera();
             }
         });
-        layout.addView(openSIMDevice);
+        devices.addView(openSIMDevice);
+        layout.addView(devices);
 
         sdAddCardItems();
 
         useBrowserBox = new CheckBox(this);
+        useBrowserBox.setLayoutParams(defW);
         useBrowserBox.setText("Use External Browser");
         layout.addView(useBrowserBox);
 
         reopenView = new Button(this);
+        reopenView.setLayoutParams(defW);
         reopenView.setText("Live View");
         reopenView.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -495,6 +518,7 @@ public final class LiveStackerMain extends android.app.Activity {
         layout.addView(reopenView);
 
         Button exit = new Button(this);
+        exit.setLayoutParams(defW);
         exit.setText("Close and Exit");
         exit.setOnClickListener(new View.OnClickListener() {
             public void onClick(View view) {
@@ -512,8 +536,33 @@ public final class LiveStackerMain extends android.app.Activity {
         layout.addView(exit);
 
         outputDirView = new TextView(this);
+        outputDirView.setLayoutParams(defW);
         outputDirView.setText(prettyDataDirName());
         layout.addView(outputDirView);
+
+        Space space = new Space(this);
+        space.setLayoutParams(spaceW);
+        layout.addView(space);
+
+
+        LinearLayout copyL = new LinearLayout(this);
+        copyL.setOrientation(LinearLayout.HORIZONTAL);
+        copyL.setGravity(Gravity.END);
+        copyL.setLayoutParams(defW);
+
+        Button copy = new Button(this);
+        copy.setText("Licenses");
+        copy.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intent = new Intent(LiveStackerMain.this, WViewActivity.class);
+                intent.putExtra("uri","file:///android_asset/copying.html");
+                intent.putExtra("FS","no");
+                startActivity(intent);
+            }
+        });
+        copyL.addView(copy);
+        layout.addView(copyL);
 
         setButtonStatus();
         setContentView(layout);
