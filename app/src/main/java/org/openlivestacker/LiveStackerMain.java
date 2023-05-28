@@ -550,6 +550,17 @@ public final class LiveStackerMain extends android.app.Activity {
         copyL.setGravity(Gravity.END);
         copyL.setLayoutParams(defW);
 
+        Button manual = new Button(this);
+        manual.setText("HELP");
+        manual.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                String uri = "https://github.com/artyom-beilis/OpenLiveStacker/wiki/Open-Live-Stacker-Manual";
+                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
+                startActivity(browserIntent);
+            }
+        });
+        copyL.addView(manual);
         Button copy = new Button(this);
         copy.setText("Licenses");
         copy.setOnClickListener(new View.OnClickListener() {
@@ -562,6 +573,9 @@ public final class LiveStackerMain extends android.app.Activity {
             }
         });
         copyL.addView(copy);
+
+
+
         layout.addView(copyL);
 
         setButtonStatus();
