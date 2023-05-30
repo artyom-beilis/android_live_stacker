@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android='http://schemas.android.com/apk/res/android'
     package='org.openlivestacker'
-    android:versionCode='3'
-    android:versionName='0.0.3'
+    android:versionCode='100'
+    android:versionName='beta12'
     android:extractNativeLibs="true"
     >
     <uses-sdk
@@ -13,6 +13,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
 

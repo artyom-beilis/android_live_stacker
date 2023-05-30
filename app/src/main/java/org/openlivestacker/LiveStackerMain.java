@@ -21,6 +21,7 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.Uri;
+import android.os.Build;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -284,6 +285,10 @@ public final class LiveStackerMain extends android.app.Activity {
                 if (ACTION_USB_PERMISSION.equals(action)) {
                     synchronized (this) {
                         UsbDevice device = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                        if(device == null) {
+                            alertMe("Got null device");
+                            return;
+                        }
                         if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
                             if (device != null) {
                                 if (uvcStartDone) {
@@ -303,7 +308,10 @@ public final class LiveStackerMain extends android.app.Activity {
             }
         };
 
-        PendingIntent permissionIntent = PendingIntent.getBroadcast(this, REQUEST_USB_ACCESS, new Intent(ACTION_USB_PERMISSION), 0);
+        int flags = 0;
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            flags = PendingIntent.FLAG_MUTABLE;
+        PendingIntent permissionIntent = PendingIntent.getBroadcast(this, REQUEST_USB_ACCESS, new Intent(ACTION_USB_PERMISSION), flags);
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
         registerReceiver(usbReceiver, filter);
         manager.requestPermission(firstDevice, permissionIntent);
@@ -316,7 +324,10 @@ public final class LiveStackerMain extends android.app.Activity {
     boolean hasPerm()
     {
         boolean hasLPermission = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED;
+                == PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED
+                ;
         return hasLPermission;
     }
 
@@ -338,7 +349,8 @@ public final class LiveStackerMain extends android.app.Activity {
         else {
             ActivityCompat.requestPermissions(this,
                     new String[]{
-                            Manifest.permission.ACCESS_FINE_LOCATION
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.POST_NOTIFICATIONS
                     },
                     REQUEST_PERMISSIONS);
         }
@@ -354,6 +366,12 @@ public final class LiveStackerMain extends android.app.Activity {
                && permissions[0].equals(Manifest.permission.ACCESS_FINE_LOCATION))
             {
                 getLocation();
+            }
+            if(grantResults.length >= 2
+                    && grantResults[0] != PackageManager.PERMISSION_GRANTED
+                    && permissions[0].equals(Manifest.permission.POST_NOTIFICATIONS))
+            {
+                alertMe("Without notification permission you may not notices that OpenLiveStacker works in background");
             }
         }
         else if(requestCode == REQUEST_CAMERA_FOR_UVC) {
@@ -522,6 +540,7 @@ public final class LiveStackerMain extends android.app.Activity {
         exit.setText("Close and Exit");
         exit.setOnClickListener(new View.OnClickListener() {
             public void onClick(View view) {
+                Log.i("OLS","Starting Shutdown");
                 if(olsActive) {
                     stopAll();
                 }

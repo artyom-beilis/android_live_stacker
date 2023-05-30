@@ -92,9 +92,12 @@ public class OLSWorker extends Worker {
         notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
+        int flags = 0;
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            flags = PendingIntent.FLAG_IMMUTABLE;
 
         PendingIntent intent = PendingIntent.getActivity(context, 0,
-                notificationIntent, 0);
+                notificationIntent, flags);
 
         Notification.Builder builder = new Notification.Builder(context)
                 .setContentTitle("OpenLiveStacker")
