@@ -361,15 +361,24 @@ public final class LiveStackerMain extends android.app.Activity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if(requestCode == REQUEST_PERMISSIONS) {
-            if(grantResults.length >= 1
-               && grantResults[0] == PackageManager.PERMISSION_GRANTED
-               && permissions[0].equals(Manifest.permission.ACCESS_FINE_LOCATION))
-            {
+            boolean hasLoc = false;
+            boolean hasNot = false;
+            for(int i=0;i<grantResults.length;i++) {
+                if(permissions[i].equals(Manifest.permission.ACCESS_FINE_LOCATION)
+                   && grantResults[i] == PackageManager.PERMISSION_GRANTED)
+                {
+                    hasLoc = true;
+                }
+                if(permissions[i].equals(Manifest.permission.POST_NOTIFICATIONS)
+                        && grantResults[i] == PackageManager.PERMISSION_GRANTED)
+                {
+                    hasNot = true;
+                }
+            }
+            if(hasLoc) {
                 getLocation();
             }
-            if(grantResults.length >= 2
-                    && grantResults[0] != PackageManager.PERMISSION_GRANTED
-                    && permissions[0].equals(Manifest.permission.POST_NOTIFICATIONS))
+            if(!hasNot && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
             {
                 alertMe("Without notification permission you may not notices that OpenLiveStacker works in background");
             }
