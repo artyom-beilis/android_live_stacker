@@ -420,6 +420,11 @@ public final class LiveStackerMain extends android.app.Activity {
     {
         layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
+        if(!errorMessage.equals("")) {
+            TextView message = new TextView(this);
+            message.setText(errorMessage);
+            layout.addView(message);
+        }
         Button exit = new Button(this);
         exit.setText("Exit - No Permissions");
         exit.setOnClickListener(new View.OnClickListener() {
@@ -695,7 +700,8 @@ public final class LiveStackerMain extends android.app.Activity {
             test.delete();
         }
         catch(IOException e) {
-            Log.e("OLS","Permission issues!" + e.getMessage());
+            Log.e("OLS", "Permission issues!" + e.getMessage());
+            errorMessage = "Access error: " + e.getMessage();
             return false;
         }
         return true;
@@ -782,6 +788,7 @@ public final class LiveStackerMain extends android.app.Activity {
     static protected OLSApi ols;
     static boolean dirsReady = false;
     static boolean accessFailed = false;
+    static String errorMessage = "";
     boolean enableImportCalibration = false;
     boolean hasSDCard = false;
 
