@@ -6,8 +6,11 @@ android {
 
     defaultConfig {
         applicationId "org.openlivestacker"
-        minSdk 24
+        minSdk 23
         targetSdk 33
+        //ndk {
+        //    abiFilters "armeabi-v7a"
+        //}
     }
 
     buildTypes {
