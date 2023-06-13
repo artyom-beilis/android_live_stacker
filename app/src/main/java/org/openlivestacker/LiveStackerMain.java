@@ -253,8 +253,20 @@ public final class LiveStackerMain extends android.app.Activity {
             Log.e("UVC", "Failed to open camera:" + e.toString());
         }
     }
-
     private void startASI() {
+        if (hasCameraPerm()) {
+            startASIWithPerm();
+        }
+        else {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{
+                            Manifest.permission.CAMERA
+                    },
+                    REQUEST_CAMERA_FOR_ASI);
+
+        }
+    }
+    private void startASIWithPerm() {
         usbAccess(new USBOpener() {
             @Override
             public void open(Context context, UsbDevice device) {
@@ -317,10 +329,10 @@ public final class LiveStackerMain extends android.app.Activity {
         manager.requestPermission(firstDevice, permissionIntent);
     }
 
+    private static final int REQUEST_USB_ACCESS = 111;
     private static final int REQUEST_PERMISSIONS = 112;
     private static final int REQUEST_CAMERA_FOR_UVC = 113;
-    private static final int REQUEST_USB_ACCESS = 111;
-
+    private static final int REQUEST_CAMERA_FOR_ASI = 114;
     boolean hasPerm()
     {
         boolean hasLPermission = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -383,12 +395,15 @@ public final class LiveStackerMain extends android.app.Activity {
                 alertMe("Without notification permission you may not notices that OpenLiveStacker works in background");
             }
         }
-        else if(requestCode == REQUEST_CAMERA_FOR_UVC) {
+        else if(requestCode == REQUEST_CAMERA_FOR_UVC || requestCode == REQUEST_CAMERA_FOR_ASI) {
             if(grantResults.length >= 1
                     && grantResults[0] == PackageManager.PERMISSION_GRANTED
                     && permissions[0].equals(Manifest.permission.CAMERA))
             {
-                startUVCWithCamPerm();
+                if(requestCode == REQUEST_CAMERA_FOR_UVC)
+                    startUVCWithCamPerm();
+                else if(requestCode == REQUEST_CAMERA_FOR_ASI)
+                    startASIWithPerm();
             }
         }
     }
