@@ -1,6 +1,7 @@
 package org.openlivestacker;
 
 import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.Log;
@@ -83,7 +84,11 @@ public class WViewActivity extends android.app.Activity {
     protected @Override
     void onCreate(final android.os.Bundle activityState) {
         super.onCreate(activityState);
-        fullScreen =  getIntent().getExtras().getString("FS").equals("yes");
+        fullScreen =  getIntent().getExtras().getString("FS","no").equals("yes");
+        boolean landscape =   getIntent().getExtras().getString("landscape","no").equals("yes");
+        if(landscape) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        }
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);

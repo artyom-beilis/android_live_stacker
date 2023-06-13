@@ -142,6 +142,8 @@ public final class LiveStackerMain extends android.app.Activity {
             browserIntent = new Intent(this, WViewActivity.class);
             browserIntent.putExtra("uri",uri);
             browserIntent.putExtra("FS","yes");
+            String value = forceLandscape.isChecked() ? "yes" : "no";
+            browserIntent.putExtra("landscape",value);
 
         }
         startActivity(browserIntent);
@@ -484,6 +486,7 @@ public final class LiveStackerMain extends android.app.Activity {
             Intent intent = new Intent(this, WViewActivity.class);
             intent.putExtra("uri","file:///android_asset/android_ols_permission.html");
             intent.putExtra("FS","no");
+            intent.putExtra("landscape","no");
             startActivity(intent);
             onCreateFail();
             return;
@@ -546,6 +549,12 @@ public final class LiveStackerMain extends android.app.Activity {
         layout.addView(devices);
 
         sdAddCardItems();
+
+        forceLandscape = new CheckBox(this);
+        forceLandscape.setLayoutParams(defW);
+        forceLandscape.setText("Use Landscape");
+        layout.addView(forceLandscape);
+
 
         useBrowserBox = new CheckBox(this);
         useBrowserBox.setLayoutParams(defW);
@@ -617,6 +626,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 Intent intent = new Intent(LiveStackerMain.this, WViewActivity.class);
                 intent.putExtra("uri","file:///android_asset/copying.html");
                 intent.putExtra("FS","no");
+                intent.putExtra("landscape","no");
                 startActivity(intent);
             }
         });
@@ -783,6 +793,7 @@ public final class LiveStackerMain extends android.app.Activity {
     private Button openUVCDevice, openASIDevice, openSIMDevice;
     private Button reopenView;
     private CheckBox useBrowserBox;
+    private CheckBox forceLandscape;
     private CheckBox useSDCard;
     private LinearLayout layout;
     private TextView outputDirView;
