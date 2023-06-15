@@ -229,18 +229,30 @@ public final class LiveStackerMain extends android.app.Activity {
         int N = ZwoCamera.getNumOfConnectedCameras();
         Log.e("OLS", "Devices = " + N);
 
+        if(N <= 0 || cameras.size() == 0) {
+            alertMe("ASI Driver detected no cameras!");
+            return;
+        }
+
         int camId = 0;
         ZwoCamera camera = new ZwoCamera(camId);
         Log.e("OLS", "Camera created");
         ASIConstants.ASI_ERROR_CODE ret = camera.openCamera();
         if (ret.intVal != ASI_SUCCESS) {
-            Log.e("OLS", String.format("Failed to open ASI camera %d code=%d", camId, ret.intVal));
+            String message = String.format("Failed to open ASI camera %d code=%d: %s",
+                            camId, ret.intVal,ASIConstants.ASI_ERROR_CODE.getErrorString(ret.intVal));
+            Log.e("OLS", message);
+            alertMe(message);
             return;
         }
+
         Log.e("OLS", "Opened camera");
         ASIReturnType r = ZwoCamera.getCameraProperty(camId);
         if (r.getErrorCode().intVal != ASI_SUCCESS) {
             Log.e("OLS", "Failed to get properties for " + camId);
+            alertMe(String.format("Failed to get properties for %d, code=%d: %s",
+                    camId,r.getErrorCode().intVal,ASIConstants.ASI_ERROR_CODE.getErrorString(r.getErrorCode().intVal)
+                ));
             return;
         }
         ASICameraProperty prop = (ASICameraProperty) (r.getObj());
@@ -252,7 +264,7 @@ public final class LiveStackerMain extends android.app.Activity {
             runService();
         } catch (Exception e) {
             alertMe("Failed to open camera:" + e.toString());
-            Log.e("UVC", "Failed to open camera:" + e.toString());
+            Log.e("UVC", "Failed to open camera from native code:" + e.toString());
         }
     }
     private void startASI() {
