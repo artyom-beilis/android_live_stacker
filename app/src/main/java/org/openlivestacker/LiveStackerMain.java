@@ -66,8 +66,9 @@ public final class LiveStackerMain extends android.app.Activity {
     ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     private void setButtonStatus() {
-        openUVCDevice.setVisibility((!olsActive && !asiLoaded) ? View.VISIBLE : View.GONE);
-        openASIDevice.setVisibility((!olsActive && !uvcLoaded) ? View.VISIBLE : View.GONE);
+        openUVCDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
+        openASIDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
+        openToupDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         openSIMDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         reopenView.setVisibility(olsActive ? View.VISIBLE : View.GONE);
         if(useSDCard!=null)
@@ -220,6 +221,18 @@ public final class LiveStackerMain extends android.app.Activity {
         }
     }
 
+    private void startToupDevice(Context context, UsbDevice device)
+    {
+        try {
+            toupLoaded = true;
+            ols.init("toup", null, 0);
+            runService();
+        } catch (Exception e) {
+            alertMe("Failed to open Toup Camera:" + e.toString());
+            Log.e("OLS", "Failed to open camera from native code:" + e.toString());
+        }
+    }
+
     private void startASIDevice(Context context, UsbDevice device) {
         ASIUSBManager.initContext(context);
         ArrayList<String> cameras = ASIUSBManager.getCameraNameList();
@@ -280,6 +293,31 @@ public final class LiveStackerMain extends android.app.Activity {
 
         }
     }
+    private void startToup() {
+        if (hasCameraPerm()) {
+            startToupWithPerm();
+        }
+        else {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{
+                            Manifest.permission.CAMERA
+                    },
+                    REQUEST_CAMERA_FOR_TOUP);
+
+        }
+    }
+
+
+    private void startToupWithPerm()
+    {
+        usbAccess(new USBOpener() {
+            @Override
+            public void open(Context context, UsbDevice device) {
+                startToupDevice(context, device);
+            }
+        });
+    }
+
     private void startASIWithPerm() {
         usbAccess(new USBOpener() {
             @Override
@@ -347,6 +385,7 @@ public final class LiveStackerMain extends android.app.Activity {
     private static final int REQUEST_PERMISSIONS = 112;
     private static final int REQUEST_CAMERA_FOR_UVC = 113;
     private static final int REQUEST_CAMERA_FOR_ASI = 114;
+    private static final int REQUEST_CAMERA_FOR_TOUP = 115;
     boolean hasPerm()
     {
         boolean hasLPermission = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -409,7 +448,9 @@ public final class LiveStackerMain extends android.app.Activity {
                 alertMe("Without notification permission you may not notices that OpenLiveStacker works in background");
             }
         }
-        else if(requestCode == REQUEST_CAMERA_FOR_UVC || requestCode == REQUEST_CAMERA_FOR_ASI) {
+        else if(requestCode == REQUEST_CAMERA_FOR_UVC
+                || requestCode == REQUEST_CAMERA_FOR_ASI
+                || requestCode == REQUEST_CAMERA_FOR_TOUP) {
             if(grantResults.length >= 1
                     && grantResults[0] == PackageManager.PERMISSION_GRANTED
                     && permissions[0].equals(Manifest.permission.CAMERA))
@@ -418,6 +459,8 @@ public final class LiveStackerMain extends android.app.Activity {
                     startUVCWithCamPerm();
                 else if(requestCode == REQUEST_CAMERA_FOR_ASI)
                     startASIWithPerm();
+                else if(requestCode == REQUEST_CAMERA_FOR_TOUP)
+                    startToupWithPerm();
             }
         }
     }
@@ -547,6 +590,16 @@ public final class LiveStackerMain extends android.app.Activity {
             }
         });
         devices.addView(openASIDevice);
+
+        openToupDevice = new Button(this);
+        openToupDevice.setLayoutParams(devW);
+        openToupDevice.setText("Toup");
+        openToupDevice.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View view) {
+                startToup();
+            }
+        });
+        devices.addView(openToupDevice);
 
 
         openSIMDevice = new Button(this);
@@ -802,7 +855,7 @@ public final class LiveStackerMain extends android.app.Activity {
         }
     }
 
-    private Button openUVCDevice, openASIDevice, openSIMDevice;
+    private Button openUVCDevice, openASIDevice, openSIMDevice, openToupDevice;
     private Button reopenView;
     private CheckBox useBrowserBox;
     private CheckBox forceLandscape;
@@ -819,6 +872,7 @@ public final class LiveStackerMain extends android.app.Activity {
     static private boolean uvcStartDone = false;
     static private boolean olsActive = false;
     static private boolean uvcLoaded = false;
+    static private boolean toupLoaded = false;
     static private boolean asiLoaded = false;
     static double lat = -1000;
     static double lon = -1000;
