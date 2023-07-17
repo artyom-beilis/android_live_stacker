@@ -8,9 +8,10 @@ android {
         applicationId "org.openlivestacker"
         minSdk 23
         targetSdk 33
-        //ndk {
-        //    abiFilters "armeabi-v7a"
-        //}
+        ndk {
+            abiFilters "armeabi-v7a"
+        //    abiFilters "arm64-v8a"
+        }
     }
 
     buildTypes {
