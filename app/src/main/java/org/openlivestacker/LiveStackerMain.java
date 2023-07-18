@@ -224,8 +224,18 @@ public final class LiveStackerMain extends android.app.Activity {
     private void startToupDevice(Context context, UsbDevice device)
     {
         try {
+            UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
+            UsbDeviceConnection connection = manager.openDevice(device);
+            int fd = connection.getFileDescriptor();
+            int productId =device.getProductId();
+            int vendorId = device.getVendorId();
+            String name = device.getProductName();
+            if(name == null)
+                name = "Camera";
+
+            String driver_opt = String.format("fd-%d-%04x-%04x:%s", fd, vendorId, productId, name);
             toupLoaded = true;
-            ols.init("toup", null, 0);
+            ols.init("toup", driver_opt, -1);
             runService();
         } catch (Exception e) {
             alertMe("Failed to open Toup Camera:" + e.toString());
