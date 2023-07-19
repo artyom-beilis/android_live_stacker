@@ -340,17 +340,27 @@ public final class LiveStackerMain extends android.app.Activity {
     private void usbAccess(USBOpener opener) {
         UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
         HashMap<String, UsbDevice> deviceList = manager.getDeviceList();
-        UsbDevice firstDevice = null;
+        UsbDevice[] devices = new UsbDevice[deviceList.size()];
+        String[] deviceNames = new String[deviceList.size()];
+        int i=0;
         for (Map.Entry<String, UsbDevice> dev : deviceList.entrySet()) {
             UsbDevice device = dev.getValue();
-            if (firstDevice == null) {
-                firstDevice = device;
-            }
+            devices[i] = device;
+            deviceNames[i] = device.getProductName();
+            if(deviceNames[i] == null)
+                deviceNames[i] = String.format("%04x %04x",device.getVendorId(),device.getDeviceId());
         }
-        if (firstDevice == null) {
+        if(devices.length == 0) {
             alertMe("No USB Devices Connected");
-            return;
         }
+        else if(devices.length == 1) {
+            usbAccessDevice(opener,devices[0]);
+        }
+        else {
+            selectDevice(deviceNames, devices, opener);
+        }
+    }
+    private void usbAccessDevice(USBOpener opener,UsbDevice device) {
 
         usbReceiver = usbReceiver != null ? usbReceiver : new BroadcastReceiver() {
 
@@ -388,7 +398,8 @@ public final class LiveStackerMain extends android.app.Activity {
         PendingIntent permissionIntent = PendingIntent.getBroadcast(this, REQUEST_USB_ACCESS, new Intent(ACTION_USB_PERMISSION), flags);
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
         registerReceiver(usbReceiver, filter);
-        manager.requestPermission(firstDevice, permissionIntent);
+        UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
+        manager.requestPermission(device, permissionIntent);
     }
 
     private static final int REQUEST_USB_ACCESS = 111;
@@ -730,6 +741,23 @@ public final class LiveStackerMain extends android.app.Activity {
             alertMe("Failed to close service:" + e.toString());
         }
     }
+
+    @SuppressLint("NewApi")
+    private void selectDevice(String [] items, final UsbDevice[] devices,USBOpener opener)
+    {
+        AlertDialog selectDeviceDialog =
+                new AlertDialog.Builder(this)
+                        .setTitle("Select Device")
+                        .setItems(items,new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int i) {
+                                usbAccessDevice(opener,devices[i]);
+                            }
+                        })
+                        .create();
+        selectDeviceDialog.show();
+    }
+
 
     @SuppressLint("NewApi")
     private void alertMe(String msg)
