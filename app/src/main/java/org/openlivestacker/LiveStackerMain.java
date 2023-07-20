@@ -349,6 +349,7 @@ public final class LiveStackerMain extends android.app.Activity {
             deviceNames[i] = device.getProductName();
             if(deviceNames[i] == null)
                 deviceNames[i] = String.format("%04x %04x",device.getVendorId(),device.getDeviceId());
+            i++;
         }
         if(devices.length == 0) {
             alertMe("No USB Devices Connected");
@@ -742,7 +743,6 @@ public final class LiveStackerMain extends android.app.Activity {
         }
     }
 
-    @SuppressLint("NewApi")
     private void selectDevice(String [] items, final UsbDevice[] devices,USBOpener opener)
     {
         AlertDialog selectDeviceDialog =
@@ -759,7 +759,6 @@ public final class LiveStackerMain extends android.app.Activity {
     }
 
 
-    @SuppressLint("NewApi")
     private void alertMe(String msg)
     {
         Log.e("UVC","Message" + msg);
