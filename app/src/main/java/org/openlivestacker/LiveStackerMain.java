@@ -694,6 +694,10 @@ public final class LiveStackerMain extends android.app.Activity {
         copyL.setGravity(Gravity.END);
         copyL.setLayoutParams(defW);
 
+        TextView ver = new TextView(this);
+        ver.setText("Version: " + BuildConfig.VERSION_NAME);
+        copyL.addView(ver);
+
         Button manual = new Button(this);
         manual.setText("HELP");
         manual.setOnClickListener(new View.OnClickListener() {
