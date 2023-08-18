@@ -69,6 +69,7 @@ public final class LiveStackerMain extends android.app.Activity {
         openUVCDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         openASIDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         openToupDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
+        openGPDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         openSIMDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         reopenView.setVisibility(olsActive ? View.VISIBLE : View.GONE);
         if(useSDCard!=null)
@@ -152,8 +153,18 @@ public final class LiveStackerMain extends android.app.Activity {
 
     private boolean openUVCCamera(int fd) {
         try {
-            uvcLoaded = true;
             ols.init("uvc", null, fd);
+            runService();
+        } catch (Exception e) {
+            alertMe("Failed to open camera:" + e.toString());
+            Log.e("UVC", "Failed to open camera:" + e.toString());
+            return false;
+        }
+        return true;
+    }
+    private boolean openGPCamera(int fd) {
+        try {
+            ols.init("gphoto2", libDir, fd);
             runService();
         } catch (Exception e) {
             alertMe("Failed to open camera:" + e.toString());
@@ -221,6 +232,49 @@ public final class LiveStackerMain extends android.app.Activity {
         }
     }
 
+
+    private void startGPDevice(Context context, UsbDevice device) {
+
+        UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
+        UsbDeviceConnection connection = manager.openDevice(device);
+        int fd = connection.getFileDescriptor();
+
+        usbDevice = connection;
+        if (!openGPCamera(fd)) {
+            Log.e("UVC", "Opening failed, shutting down USB");
+            usbDevice.close();
+            Log.e("UVC", "Opening failed, usbDevice is closed");
+        }
+        //call method to set up device communication
+
+    }
+
+    private void startGPWithCamPerm()
+    {
+        usbAccess(new USBOpener() {
+            @Override
+            public void open(Context context, UsbDevice device) {
+                startGPDevice(context, device);
+            }
+        });
+    }
+
+    private void startGP() {
+        if(hasCameraPerm()) {
+            startGPWithCamPerm();
+        }
+        else {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{
+                            Manifest.permission.CAMERA
+                    },
+                    REQUEST_CAMERA_FOR_GP);
+        }
+    }
+
+
+
+
     private void startToupDevice(Context context, UsbDevice device)
     {
         try {
@@ -236,7 +290,6 @@ public final class LiveStackerMain extends android.app.Activity {
                 name = "Camera";
 
             String driver_opt = String.format("%d %04x %04x:%s",fd, vendorId, productId, name);
-            toupLoaded = true;
             ols.init("toup", driver_opt, -1);
             runService();
         } catch (Exception e) {
@@ -284,7 +337,6 @@ public final class LiveStackerMain extends android.app.Activity {
         Log.e("OLS", "Get camera prop id=" + prop.getCameraID());
         camId = prop.getCameraID();
         try {
-            asiLoaded = true;
             ols.init("asi", null, camId);
             runService();
         } catch (Exception e) {
@@ -410,6 +462,8 @@ public final class LiveStackerMain extends android.app.Activity {
     private static final int REQUEST_CAMERA_FOR_UVC = 113;
     private static final int REQUEST_CAMERA_FOR_ASI = 114;
     private static final int REQUEST_CAMERA_FOR_TOUP = 115;
+    private static final int REQUEST_CAMERA_FOR_GP = 116;
+
     boolean hasPerm()
     {
         boolean hasLPermission = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -474,7 +528,9 @@ public final class LiveStackerMain extends android.app.Activity {
         }
         else if(requestCode == REQUEST_CAMERA_FOR_UVC
                 || requestCode == REQUEST_CAMERA_FOR_ASI
-                || requestCode == REQUEST_CAMERA_FOR_TOUP) {
+                || requestCode == REQUEST_CAMERA_FOR_TOUP
+                || requestCode == REQUEST_CAMERA_FOR_GP
+        ) {
             if(grantResults.length >= 1
                     && grantResults[0] == PackageManager.PERMISSION_GRANTED
                     && permissions[0].equals(Manifest.permission.CAMERA))
@@ -485,6 +541,8 @@ public final class LiveStackerMain extends android.app.Activity {
                     startASIWithPerm();
                 else if(requestCode == REQUEST_CAMERA_FOR_TOUP)
                     startToupWithPerm();
+                else if(requestCode == REQUEST_CAMERA_FOR_GP)
+                    startGPWithCamPerm();
             }
         }
     }
@@ -624,6 +682,17 @@ public final class LiveStackerMain extends android.app.Activity {
             }
         });
         devices.addView(openToupDevice);
+
+        openGPDevice = new Button(this);
+        openGPDevice.setLayoutParams(devW);
+        openGPDevice.setText("GPhoto");
+        openGPDevice.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View view) {
+                startGP();
+            }
+        });
+        devices.addView(openGPDevice);
+
 
 
         openSIMDevice = new Button(this);
@@ -898,7 +967,7 @@ public final class LiveStackerMain extends android.app.Activity {
         }
     }
 
-    private Button openUVCDevice, openASIDevice, openSIMDevice, openToupDevice;
+    private Button openUVCDevice, openASIDevice, openSIMDevice, openToupDevice, openGPDevice;
     private Button reopenView;
     private CheckBox useBrowserBox;
     private CheckBox forceLandscape;
@@ -914,9 +983,6 @@ public final class LiveStackerMain extends android.app.Activity {
 //    static private ZwoCamera asiCamera;
     static private boolean uvcStartDone = false;
     static private boolean olsActive = false;
-    static private boolean uvcLoaded = false;
-    static private boolean toupLoaded = false;
-    static private boolean asiLoaded = false;
     static double lat = -1000;
     static double lon = -1000;
 
