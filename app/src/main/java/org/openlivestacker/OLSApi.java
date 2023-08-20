@@ -29,7 +29,8 @@ public class OLSApi {
                              String driver_dir,
                              String driver,
                              String driver_config,
-                             int driver_parameter);
+                             int driver_parameter,
+                             int cam_debug);
         int ols_android_run();
         int ols_android_shutdown();
         int ols_android_get_frames_count();
@@ -133,10 +134,12 @@ public class OLSApi {
 
     public void init(String driver,
                      String driver_option,
-                     int driver_parameter)  throws Exception
+                     int driver_parameter,
+                     boolean cam_debug)  throws Exception
     {
         Log.e("OLS","DRIVER DIR" + lib);
-        check(api.ols_android_init(data,www,ip,port,lib,driver,driver_option,driver_parameter),
+        check(api.ols_android_init(data,www,ip,port,lib,driver,driver_option,driver_parameter,
+                        cam_debug ? 1: 0),
                 "init");
     }
 

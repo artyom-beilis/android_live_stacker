@@ -72,6 +72,7 @@ public final class LiveStackerMain extends android.app.Activity {
         openGPDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         openSIMDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         reopenView.setVisibility(olsActive ? View.VISIBLE : View.GONE);
+        camDebugBox.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         if(useSDCard!=null)
             useSDCard.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
     }
@@ -153,7 +154,7 @@ public final class LiveStackerMain extends android.app.Activity {
 
     private boolean openUVCCamera(int fd) {
         try {
-            ols.init("uvc", null, fd);
+            ols.init("uvc", null, fd, camDebugBox.isChecked());
             runService();
         } catch (Exception e) {
             alertMe("Failed to open camera:" + e.toString());
@@ -164,7 +165,7 @@ public final class LiveStackerMain extends android.app.Activity {
     }
     private boolean openGPCamera(int fd) {
         try {
-            ols.init("gphoto2", libDir, fd);
+            ols.init("gphoto2", libDir, fd, camDebugBox.isChecked());
             runService();
         } catch (Exception e) {
             alertMe("Failed to open camera:" + e.toString());
@@ -176,7 +177,7 @@ public final class LiveStackerMain extends android.app.Activity {
 
     private boolean openSIMCamera() {
         try {
-            ols.init("sim", this.simData, 0);
+            ols.init("sim", this.simData, 0,  camDebugBox.isChecked());
             Log.e("OLS", "OLS Init done");
             runService();
         } catch (Exception e) {
@@ -290,7 +291,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 name = "Camera";
 
             String driver_opt = String.format("%d %04x %04x:%s",fd, vendorId, productId, name);
-            ols.init("toup", driver_opt, -1);
+            ols.init("toup", driver_opt, -1,  camDebugBox.isChecked());
             runService();
         } catch (Exception e) {
             alertMe("Failed to open Toup Camera:" + e.toString());
@@ -337,7 +338,7 @@ public final class LiveStackerMain extends android.app.Activity {
         Log.e("OLS", "Get camera prop id=" + prop.getCameraID());
         camId = prop.getCameraID();
         try {
-            ols.init("asi", null, camId);
+            ols.init("asi", null, camId,  camDebugBox.isChecked());
             runService();
         } catch (Exception e) {
             alertMe("Failed to open camera:" + e.toString());
@@ -649,9 +650,12 @@ public final class LiveStackerMain extends android.app.Activity {
         layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
 
-        LinearLayout devices = new LinearLayout(this);
-        devices.setOrientation(LinearLayout.HORIZONTAL);
-        devices.setLayoutParams(defW);
+        LinearLayout devices_1 = new LinearLayout(this);
+        devices_1.setOrientation(LinearLayout.HORIZONTAL);
+        devices_1.setLayoutParams(defW);
+        LinearLayout devices_2 = new LinearLayout(this);
+        devices_2.setOrientation(LinearLayout.HORIZONTAL);
+        devices_2.setLayoutParams(defW);
 
         openUVCDevice = new Button(this);
         openUVCDevice.setLayoutParams(devW);
@@ -661,7 +665,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 startUVC();
             }
         });
-        devices.addView(openUVCDevice);
+        devices_1.addView(openUVCDevice);
 
         openASIDevice = new Button(this);
         openASIDevice.setLayoutParams(devW);
@@ -671,7 +675,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 startASI();
             }
         });
-        devices.addView(openASIDevice);
+        devices_1.addView(openASIDevice);
 
         openToupDevice = new Button(this);
         openToupDevice.setLayoutParams(devW);
@@ -681,7 +685,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 startToup();
             }
         });
-        devices.addView(openToupDevice);
+        devices_1.addView(openToupDevice);
 
         openGPDevice = new Button(this);
         openGPDevice.setLayoutParams(devW);
@@ -691,7 +695,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 startGP();
             }
         });
-        devices.addView(openGPDevice);
+        devices_2.addView(openGPDevice);
 
 
 
@@ -703,8 +707,9 @@ public final class LiveStackerMain extends android.app.Activity {
                 openSIMCamera();
             }
         });
-        devices.addView(openSIMDevice);
-        layout.addView(devices);
+        devices_2.addView(openSIMDevice);
+        layout.addView(devices_1);
+        layout.addView(devices_2);
 
         sdAddCardItems();
 
@@ -718,6 +723,12 @@ public final class LiveStackerMain extends android.app.Activity {
         useBrowserBox.setLayoutParams(defW);
         useBrowserBox.setText("Use External Browser");
         layout.addView(useBrowserBox);
+
+        camDebugBox = new CheckBox(this);
+        camDebugBox.setLayoutParams(defW);
+        camDebugBox.setText("Enable Camera Debugging");
+        layout.addView(camDebugBox);
+
 
         reopenView = new Button(this);
         reopenView.setLayoutParams(defW);
@@ -970,6 +981,7 @@ public final class LiveStackerMain extends android.app.Activity {
     private Button openUVCDevice, openASIDevice, openSIMDevice, openToupDevice, openGPDevice;
     private Button reopenView;
     private CheckBox useBrowserBox;
+    private CheckBox camDebugBox;
     private CheckBox forceLandscape;
     private CheckBox useSDCard;
     private LinearLayout layout;
