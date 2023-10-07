@@ -15,6 +15,9 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.hardware.usb.UsbDeviceConnection;
 import android.location.Criteria;
 import android.location.Location;
@@ -22,6 +25,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Build;
+import android.text.Html;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -33,6 +37,7 @@ import android.hardware.usb.UsbDevice;
 import android.content.Context;
 import android.widget.Space;
 import android.widget.TextView;
+import android.widget.Toolbar;
 
 import com.zwo.ASICameraProperty;
 import com.zwo.ASIConstants;
@@ -566,6 +571,7 @@ public final class LiveStackerMain extends android.app.Activity {
                                              }
                                          }
             );
+            setColors(useSDCard);
             layout.addView(useSDCard);
         }
 
@@ -616,6 +622,21 @@ public final class LiveStackerMain extends android.app.Activity {
         return String.format("Data Location on SDcard %s:\n%s",card,location);
     }
 
+    void setColors(Button b)
+    {
+        b.setTextColor(Color.RED);
+        b.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(16,16,16)));
+    }
+    void setColors(CheckBox v)
+    {
+        v.setTextColor(Color.RED);
+        v.setButtonTintList(ColorStateList.valueOf(Color.RED));
+    }
+    void setColors(TextView v)
+    {
+        v.setTextColor(Color.RED);
+    }
+
     void onCreateReal()
     {
         Log.i("OLS","Creating initial working directories");
@@ -646,8 +667,11 @@ public final class LiveStackerMain extends android.app.Activity {
         LinearLayout.LayoutParams spaceW = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,  1.0f
         );
+        getActionBar().setBackgroundDrawable(new ColorDrawable(Color.BLACK));
+        getActionBar().setTitle(Html.fromHtml(String.format("<font color='#ff0000'>OpenLiveStacker (%s)</font>",BuildConfig.VERSION_NAME)));
 
         layout = new LinearLayout(this);
+        layout.setBackgroundColor(Color.BLACK);
         layout.setOrientation(LinearLayout.VERTICAL);
 
         LinearLayout devices_1 = new LinearLayout(this);
@@ -665,6 +689,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 startUVC();
             }
         });
+        setColors(openUVCDevice);
         devices_1.addView(openUVCDevice);
 
         openASIDevice = new Button(this);
@@ -675,6 +700,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 startASI();
             }
         });
+        setColors(openASIDevice);
         devices_1.addView(openASIDevice);
 
         openToupDevice = new Button(this);
@@ -685,6 +711,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 startToup();
             }
         });
+        setColors(openToupDevice);
         devices_1.addView(openToupDevice);
 
         openGPDevice = new Button(this);
@@ -695,6 +722,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 startGP();
             }
         });
+        setColors(openGPDevice);
         devices_2.addView(openGPDevice);
 
 
@@ -707,6 +735,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 openSIMCamera();
             }
         });
+        setColors(openSIMDevice);
         devices_2.addView(openSIMDevice);
         layout.addView(devices_1);
         layout.addView(devices_2);
@@ -716,17 +745,20 @@ public final class LiveStackerMain extends android.app.Activity {
         forceLandscape = new CheckBox(this);
         forceLandscape.setLayoutParams(defW);
         forceLandscape.setText("Use Landscape");
+        setColors(forceLandscape);
         layout.addView(forceLandscape);
 
 
         useBrowserBox = new CheckBox(this);
         useBrowserBox.setLayoutParams(defW);
         useBrowserBox.setText("Use External Browser");
+        setColors(useBrowserBox);
         layout.addView(useBrowserBox);
 
         camDebugBox = new CheckBox(this);
         camDebugBox.setLayoutParams(defW);
         camDebugBox.setText("Enable Camera Debugging");
+        setColors(camDebugBox);
         layout.addView(camDebugBox);
 
 
@@ -739,7 +771,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 openUI();
             }
         });
-
+        setColors(reopenView);
         layout.addView(reopenView);
 
         Button exit = new Button(this);
@@ -759,11 +791,13 @@ public final class LiveStackerMain extends android.app.Activity {
                 System.exit(0);
             }
         });
+        setColors(exit);
         layout.addView(exit);
 
         outputDirView = new TextView(this);
         outputDirView.setLayoutParams(defW);
         outputDirView.setText(prettyDataDirName());
+        setColors(outputDirView);
         layout.addView(outputDirView);
 
         Space space = new Space(this);
@@ -776,9 +810,10 @@ public final class LiveStackerMain extends android.app.Activity {
         copyL.setGravity(Gravity.END);
         copyL.setLayoutParams(defW);
 
-        TextView ver = new TextView(this);
+        /*TextView ver = new TextView(this);
         ver.setText("Version: " + BuildConfig.VERSION_NAME);
-        copyL.addView(ver);
+        setColors(ver);
+        copyL.addView(ver);*/
 
         Button manual = new Button(this);
         manual.setText("HELP");
@@ -790,6 +825,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 startActivity(browserIntent);
             }
         });
+        setColors(manual);
         copyL.addView(manual);
         Button copy = new Button(this);
         copy.setText("Licenses");
@@ -803,6 +839,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 startActivity(intent);
             }
         });
+        setColors(copy);
         copyL.addView(copy);
 
 
