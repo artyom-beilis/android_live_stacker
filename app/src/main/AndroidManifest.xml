@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android='http://schemas.android.com/apk/res/android'
     package='org.openlivestacker'
-    android:versionCode='123'
-    android:versionName='Beta 23'
+    android:versionCode='124'
+    android:versionName='Beta 24'
     android:extractNativeLibs="true"
     >
     <uses-sdk
-        android:minSdkVersion="23"
+        android:minSdkVersion="24"
         android:targetSdkVersion="33"
         />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

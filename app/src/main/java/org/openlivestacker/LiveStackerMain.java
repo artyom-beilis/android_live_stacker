@@ -37,7 +37,6 @@ import android.hardware.usb.UsbDevice;
 import android.content.Context;
 import android.widget.Space;
 import android.widget.TextView;
-import android.widget.Toolbar;
 
 import com.zwo.ASICameraProperty;
 import com.zwo.ASIConstants;
@@ -72,6 +71,7 @@ public final class LiveStackerMain extends android.app.Activity {
 
     private void setButtonStatus() {
         openUVCDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
+        openAndroidCamDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         openASIDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         openToupDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         openGPDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
@@ -238,6 +238,30 @@ public final class LiveStackerMain extends android.app.Activity {
         }
     }
 
+    private  void openAndroidCamera()
+    {
+        try {
+            ols.init("android", null, 0,  camDebugBox.isChecked());
+            Log.e("OLS", "OLS Init done");
+            runService();
+        } catch (Exception e) {
+            alertMe("Failed to open camera:" + e.toString());
+            Log.e("OLS", Log.getStackTraceString(e));
+        }
+    }
+
+    private void startAndroidCam() {
+        if(hasCameraPerm()) {
+            openAndroidCamera();
+        }
+        else {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{
+                            Manifest.permission.CAMERA
+                    },
+                    REQUEST_CAMERA_FOR_ANDROID);
+        }
+    }
 
     private void startGPDevice(Context context, UsbDevice device) {
 
@@ -469,6 +493,7 @@ public final class LiveStackerMain extends android.app.Activity {
     private static final int REQUEST_CAMERA_FOR_ASI = 114;
     private static final int REQUEST_CAMERA_FOR_TOUP = 115;
     private static final int REQUEST_CAMERA_FOR_GP = 116;
+    private static final int REQUEST_CAMERA_FOR_ANDROID = 113;
 
     boolean hasPerm()
     {
@@ -536,6 +561,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 || requestCode == REQUEST_CAMERA_FOR_ASI
                 || requestCode == REQUEST_CAMERA_FOR_TOUP
                 || requestCode == REQUEST_CAMERA_FOR_GP
+                || requestCode == REQUEST_CAMERA_FOR_ANDROID
         ) {
             if(grantResults.length >= 1
                     && grantResults[0] == PackageManager.PERMISSION_GRANTED
@@ -549,6 +575,8 @@ public final class LiveStackerMain extends android.app.Activity {
                     startToupWithPerm();
                 else if(requestCode == REQUEST_CAMERA_FOR_GP)
                     startGPWithCamPerm();
+                else if(requestCode == REQUEST_CAMERA_FOR_ANDROID)
+                    openAndroidCamera();
             }
         }
     }
@@ -692,6 +720,7 @@ public final class LiveStackerMain extends android.app.Activity {
         setColors(openUVCDevice);
         devices_1.addView(openUVCDevice);
 
+
         openASIDevice = new Button(this);
         openASIDevice.setLayoutParams(devW);
         openASIDevice.setText("ASI");
@@ -713,6 +742,19 @@ public final class LiveStackerMain extends android.app.Activity {
         });
         setColors(openToupDevice);
         devices_1.addView(openToupDevice);
+
+        openAndroidCamDevice = new Button(this);
+        openAndroidCamDevice.setLayoutParams(devW);
+        openAndroidCamDevice.setText("Internal");
+        openAndroidCamDevice.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View view) {
+                startAndroidCam();
+            }
+        });
+        setColors(openAndroidCamDevice);
+        devices_2.addView(openAndroidCamDevice);
+
+
 
         openGPDevice = new Button(this);
         openGPDevice.setLayoutParams(devW);
@@ -1015,7 +1057,7 @@ public final class LiveStackerMain extends android.app.Activity {
         }
     }
 
-    private Button openUVCDevice, openASIDevice, openSIMDevice, openToupDevice, openGPDevice;
+    private Button openUVCDevice, openAndroidCamDevice, openASIDevice, openSIMDevice, openToupDevice, openGPDevice;
     private Button reopenView;
     private CheckBox useBrowserBox;
     private CheckBox camDebugBox;
