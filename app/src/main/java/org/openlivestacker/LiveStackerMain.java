@@ -180,7 +180,7 @@ public final class LiveStackerMain extends android.app.Activity {
         return true;
     }
 
-    private boolean openSIMCamera() {
+    private boolean openSIMCameraWithPerm() {
         try {
             ols.init("sim", this.simData, 0,  camDebugBox.isChecked());
             Log.e("OLS", "OLS Init done");
@@ -287,6 +287,21 @@ public final class LiveStackerMain extends android.app.Activity {
                 startGPDevice(context, device);
             }
         });
+    }
+
+    private void startSimCamera()
+    {
+        if(hasCameraPerm()) {
+            openSIMCameraWithPerm();
+        }
+        else {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{
+                            Manifest.permission.CAMERA
+                    },
+                    REQUEST_CAMERA_FOR_SIM);
+
+        }
     }
 
     private void startGP() {
@@ -493,7 +508,8 @@ public final class LiveStackerMain extends android.app.Activity {
     private static final int REQUEST_CAMERA_FOR_ASI = 114;
     private static final int REQUEST_CAMERA_FOR_TOUP = 115;
     private static final int REQUEST_CAMERA_FOR_GP = 116;
-    private static final int REQUEST_CAMERA_FOR_ANDROID = 113;
+    private static final int REQUEST_CAMERA_FOR_SIM = 117;
+    private static final int REQUEST_CAMERA_FOR_ANDROID = 118;
 
     boolean hasPerm()
     {
@@ -562,6 +578,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 || requestCode == REQUEST_CAMERA_FOR_TOUP
                 || requestCode == REQUEST_CAMERA_FOR_GP
                 || requestCode == REQUEST_CAMERA_FOR_ANDROID
+                || requestCode == REQUEST_CAMERA_FOR_SIM
         ) {
             if(grantResults.length >= 1
                     && grantResults[0] == PackageManager.PERMISSION_GRANTED
@@ -575,6 +592,8 @@ public final class LiveStackerMain extends android.app.Activity {
                     startToupWithPerm();
                 else if(requestCode == REQUEST_CAMERA_FOR_GP)
                     startGPWithCamPerm();
+                else if(requestCode == REQUEST_CAMERA_FOR_SIM)
+                    openSIMCameraWithPerm();
                 else if(requestCode == REQUEST_CAMERA_FOR_ANDROID)
                     openAndroidCamera();
             }
@@ -774,7 +793,7 @@ public final class LiveStackerMain extends android.app.Activity {
         openSIMDevice.setText("Sim.");
         openSIMDevice.setOnClickListener(new View.OnClickListener() {
             public void onClick(View view) {
-                openSIMCamera();
+                startSimCamera();
             }
         });
         setColors(openSIMDevice);
