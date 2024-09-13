@@ -439,6 +439,7 @@ public final class LiveStackerMain extends android.app.Activity {
     private void usbAccess(USBOpener opener) {
         UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
         HashMap<String, UsbDevice> deviceList = manager.getDeviceList();
+        Log.i("OLS",String.format("Device count = %d",deviceList.size()));
         UsbDevice[] devices = new UsbDevice[deviceList.size()];
         String[] deviceNames = new String[deviceList.size()];
         int i=0;
@@ -495,9 +496,18 @@ public final class LiveStackerMain extends android.app.Activity {
         int flags = 0;
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
             flags = PendingIntent.FLAG_MUTABLE;
-        PendingIntent permissionIntent = PendingIntent.getBroadcast(this, REQUEST_USB_ACCESS, new Intent(ACTION_USB_PERMISSION), flags);
+        Intent useInt=new Intent(ACTION_USB_PERMISSION);
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            useInt.setPackage("org.openlivestacker");
+        }
+        PendingIntent permissionIntent = PendingIntent.getBroadcast(this, REQUEST_USB_ACCESS, useInt, flags);
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
-        registerReceiver(usbReceiver, filter);
+
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+            registerReceiver(usbReceiver, filter,Context.RECEIVER_NOT_EXPORTED);
+        else
+            registerReceiver(usbReceiver, filter);
+
         UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
         manager.requestPermission(device, permissionIntent);
     }
