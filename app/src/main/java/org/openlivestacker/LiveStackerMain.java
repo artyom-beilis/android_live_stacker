@@ -5,6 +5,7 @@ import static com.zwo.ASIConstants.ASI_ERROR_CODE.ASI_SUCCESS;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -25,12 +26,16 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Build;
+import android.text.Editable;
 import android.text.Html;
+import android.text.InputType;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.hardware.usb.UsbManager;
 import android.hardware.usb.UsbDevice;
@@ -78,7 +83,10 @@ public final class LiveStackerMain extends android.app.Activity {
         openSIMDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         reopenView.setVisibility(olsActive ? View.VISIBLE : View.GONE);
         camDebugBox.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
-        if(useSDCard!=null)
+        memSizeReset.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
+        memSizeMessage.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
+        memSizeBox.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
+        if (useSDCard != null)
             useSDCard.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
     }
 
@@ -102,17 +110,17 @@ public final class LiveStackerMain extends android.app.Activity {
                 Context.LOCATION_SERVICE);
 
         List<String> providers = lm.getProviders(true);
-        Log.i("OLS","Providers " + providers.toString());
+        Log.i("OLS", "Providers " + providers.toString());
         for (String name : providers) {
             Location l = lm.getLastKnownLocation(name);
-            if(l!=null) {
+            if (l != null) {
                 lat = l.getLatitude();
                 lon = l.getLongitude();
                 return;
             }
         }
-        if(providers.size() > 0) {
-            Log.i("OLS","No last known location, requesting update");
+        if (providers.size() > 0) {
+            Log.i("OLS", "No last known location, requesting update");
             Criteria criteria = new Criteria();
             criteria.setAccuracy(Criteria.ACCURACY_FINE);
             lm.requestSingleUpdate(criteria, new LocationListener() {
@@ -120,38 +128,36 @@ public final class LiveStackerMain extends android.app.Activity {
                 public void onLocationChanged(@NonNull Location l) {
                     lat = l.getLatitude();
                     lon = l.getLongitude();
-                    Log.i("OLS",String.format("Got geolocation lat=%4.2f lon=%4.2f",lat,lon));
+                    Log.i("OLS", String.format("Got geolocation lat=%4.2f lon=%4.2f", lat, lon));
                 }
-            },null);
+            }, null);
         }
     }
 
-    private void openUI()
-    {
+    private void openUI() {
         String extra = "";
         boolean useAndroidView = !useBrowserBox.isChecked();
-        if(lat != -1000 && lon != -1000) {
-            extra = String.format("?lat=%4.2f&lon=%4.2f",lat,lon);
+        if (lat != -1000 && lon != -1000) {
+            extra = String.format("?lat=%4.2f&lon=%4.2f", lat, lon);
         }
-        if(useAndroidView) {
-            if(extra.equals(""))
-                extra+="?";
+        if (useAndroidView) {
+            if (extra.equals(""))
+                extra += "?";
             else
-                extra+="&";
-            extra +="android_view=1";
+                extra += "&";
+            extra += "android_view=1";
         }
         String uri = "http://127.0.0.1:8080/" + extra;
 
         Intent browserIntent;
-        if(useBrowserBox.isChecked()) {
+        if (useBrowserBox.isChecked()) {
             browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
-        }
-        else {
+        } else {
             browserIntent = new Intent(this, WViewActivity.class);
-            browserIntent.putExtra("uri",uri);
-            browserIntent.putExtra("FS","yes");
+            browserIntent.putExtra("uri", uri);
+            browserIntent.putExtra("FS", "yes");
             String value = forceLandscape.isChecked() ? "yes" : "no";
-            browserIntent.putExtra("landscape",value);
+            browserIntent.putExtra("landscape", value);
 
         }
         startActivity(browserIntent);
@@ -168,6 +174,7 @@ public final class LiveStackerMain extends android.app.Activity {
         }
         return true;
     }
+
     private boolean openGPCamera(int fd) {
         try {
             ols.init("gphoto2", libDir, fd, camDebugBox.isChecked());
@@ -182,7 +189,7 @@ public final class LiveStackerMain extends android.app.Activity {
 
     private boolean openSIMCameraWithPerm() {
         try {
-            ols.init("sim", this.simData, 0,  camDebugBox.isChecked());
+            ols.init("sim", this.simData, 0, camDebugBox.isChecked());
             Log.e("OLS", "OLS Init done");
             runService();
         } catch (Exception e) {
@@ -215,8 +222,7 @@ public final class LiveStackerMain extends android.app.Activity {
 
     }
 
-    private void startUVCWithCamPerm()
-    {
+    private void startUVCWithCamPerm() {
         usbAccess(new USBOpener() {
             @Override
             public void open(Context context, UsbDevice device) {
@@ -226,10 +232,9 @@ public final class LiveStackerMain extends android.app.Activity {
     }
 
     private void startUVC() {
-        if(hasCameraPerm()) {
+        if (hasCameraPerm()) {
             startUVCWithCamPerm();
-        }
-        else {
+        } else {
             ActivityCompat.requestPermissions(this,
                     new String[]{
                             Manifest.permission.CAMERA
@@ -238,10 +243,9 @@ public final class LiveStackerMain extends android.app.Activity {
         }
     }
 
-    private  void openAndroidCamera()
-    {
+    private void openAndroidCamera() {
         try {
-            ols.init("android", null, 0,  camDebugBox.isChecked());
+            ols.init("android", null, 0, camDebugBox.isChecked());
             Log.e("OLS", "OLS Init done");
             runService();
         } catch (Exception e) {
@@ -251,10 +255,9 @@ public final class LiveStackerMain extends android.app.Activity {
     }
 
     private void startAndroidCam() {
-        if(hasCameraPerm()) {
+        if (hasCameraPerm()) {
             openAndroidCamera();
-        }
-        else {
+        } else {
             ActivityCompat.requestPermissions(this,
                     new String[]{
                             Manifest.permission.CAMERA
@@ -279,8 +282,7 @@ public final class LiveStackerMain extends android.app.Activity {
 
     }
 
-    private void startGPWithCamPerm()
-    {
+    private void startGPWithCamPerm() {
         usbAccess(new USBOpener() {
             @Override
             public void open(Context context, UsbDevice device) {
@@ -289,12 +291,10 @@ public final class LiveStackerMain extends android.app.Activity {
         });
     }
 
-    private void startSimCamera()
-    {
-        if(hasCameraPerm()) {
+    private void startSimCamera() {
+        if (hasCameraPerm()) {
             openSIMCameraWithPerm();
-        }
-        else {
+        } else {
             ActivityCompat.requestPermissions(this,
                     new String[]{
                             Manifest.permission.CAMERA
@@ -305,10 +305,9 @@ public final class LiveStackerMain extends android.app.Activity {
     }
 
     private void startGP() {
-        if(hasCameraPerm()) {
+        if (hasCameraPerm()) {
             startGPWithCamPerm();
-        }
-        else {
+        } else {
             ActivityCompat.requestPermissions(this,
                     new String[]{
                             Manifest.permission.CAMERA
@@ -318,24 +317,21 @@ public final class LiveStackerMain extends android.app.Activity {
     }
 
 
-
-
-    private void startToupDevice(Context context, UsbDevice device)
-    {
+    private void startToupDevice(Context context, UsbDevice device) {
         try {
             UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
             UsbDeviceConnection connection = manager.openDevice(device);
             int fd = connection.getFileDescriptor();
 
-            int productId =device.getProductId();
+            int productId = device.getProductId();
             int vendorId = device.getVendorId();
 
             String name = device.getProductName();
-            if(name == null)
+            if (name == null)
                 name = "Camera";
 
-            String driver_opt = String.format("%d %04x %04x:%s",fd, vendorId, productId, name);
-            ols.init("toup", driver_opt, -1,  camDebugBox.isChecked());
+            String driver_opt = String.format("%d %04x %04x:%s", fd, vendorId, productId, name);
+            ols.init("toup", driver_opt, -1, camDebugBox.isChecked());
             runService();
         } catch (Exception e) {
             alertMe("Failed to open Toup Camera:" + e.toString());
@@ -352,7 +348,7 @@ public final class LiveStackerMain extends android.app.Activity {
         int N = ZwoCamera.getNumOfConnectedCameras();
         Log.e("OLS", "Devices = " + N);
 
-        if(N <= 0 || cameras.size() == 0) {
+        if (N <= 0 || cameras.size() == 0) {
             alertMe("ASI Driver detected no cameras!");
             return;
         }
@@ -363,7 +359,7 @@ public final class LiveStackerMain extends android.app.Activity {
         ASIConstants.ASI_ERROR_CODE ret = camera.openCamera();
         if (ret.intVal != ASI_SUCCESS) {
             String message = String.format("Failed to open ASI camera %d code=%d: %s",
-                            camId, ret.intVal,ASIConstants.ASI_ERROR_CODE.getErrorString(ret.intVal));
+                    camId, ret.intVal, ASIConstants.ASI_ERROR_CODE.getErrorString(ret.intVal));
             Log.e("OLS", message);
             alertMe(message);
             return;
@@ -374,26 +370,26 @@ public final class LiveStackerMain extends android.app.Activity {
         if (r.getErrorCode().intVal != ASI_SUCCESS) {
             Log.e("OLS", "Failed to get properties for " + camId);
             alertMe(String.format("Failed to get properties for %d, code=%d: %s",
-                    camId,r.getErrorCode().intVal,ASIConstants.ASI_ERROR_CODE.getErrorString(r.getErrorCode().intVal)
-                ));
+                    camId, r.getErrorCode().intVal, ASIConstants.ASI_ERROR_CODE.getErrorString(r.getErrorCode().intVal)
+            ));
             return;
         }
         ASICameraProperty prop = (ASICameraProperty) (r.getObj());
         Log.e("OLS", "Get camera prop id=" + prop.getCameraID());
         camId = prop.getCameraID();
         try {
-            ols.init("asi", null, camId,  camDebugBox.isChecked());
+            ols.init("asi", null, camId, camDebugBox.isChecked());
             runService();
         } catch (Exception e) {
             alertMe("Failed to open camera:" + e.toString());
             Log.e("UVC", "Failed to open camera from native code:" + e.toString());
         }
     }
+
     private void startASI() {
         if (hasCameraPerm()) {
             startASIWithPerm();
-        }
-        else {
+        } else {
             ActivityCompat.requestPermissions(this,
                     new String[]{
                             Manifest.permission.CAMERA
@@ -402,11 +398,11 @@ public final class LiveStackerMain extends android.app.Activity {
 
         }
     }
+
     private void startToup() {
         if (hasCameraPerm()) {
             startToupWithPerm();
-        }
-        else {
+        } else {
             ActivityCompat.requestPermissions(this,
                     new String[]{
                             Manifest.permission.CAMERA
@@ -417,8 +413,7 @@ public final class LiveStackerMain extends android.app.Activity {
     }
 
 
-    private void startToupWithPerm()
-    {
+    private void startToupWithPerm() {
         usbAccess(new USBOpener() {
             @Override
             public void open(Context context, UsbDevice device) {
@@ -439,29 +434,28 @@ public final class LiveStackerMain extends android.app.Activity {
     private void usbAccess(USBOpener opener) {
         UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
         HashMap<String, UsbDevice> deviceList = manager.getDeviceList();
-        Log.i("OLS",String.format("Device count = %d",deviceList.size()));
+        Log.i("OLS", String.format("Device count = %d", deviceList.size()));
         UsbDevice[] devices = new UsbDevice[deviceList.size()];
         String[] deviceNames = new String[deviceList.size()];
-        int i=0;
+        int i = 0;
         for (Map.Entry<String, UsbDevice> dev : deviceList.entrySet()) {
             UsbDevice device = dev.getValue();
             devices[i] = device;
             deviceNames[i] = device.getProductName();
-            if(deviceNames[i] == null)
-                deviceNames[i] = String.format("%04x %04x",device.getVendorId(),device.getDeviceId());
+            if (deviceNames[i] == null)
+                deviceNames[i] = String.format("%04x %04x", device.getVendorId(), device.getDeviceId());
             i++;
         }
-        if(devices.length == 0) {
+        if (devices.length == 0) {
             alertMe("No USB Devices Connected");
-        }
-        else if(devices.length == 1) {
-            usbAccessDevice(opener,devices[0]);
-        }
-        else {
+        } else if (devices.length == 1) {
+            usbAccessDevice(opener, devices[0]);
+        } else {
             selectDevice(deviceNames, devices, opener);
         }
     }
-    private void usbAccessDevice(USBOpener opener,UsbDevice device) {
+
+    private void usbAccessDevice(USBOpener opener, UsbDevice device) {
 
         usbReceiver = usbReceiver != null ? usbReceiver : new BroadcastReceiver() {
 
@@ -470,7 +464,7 @@ public final class LiveStackerMain extends android.app.Activity {
                 if (ACTION_USB_PERMISSION.equals(action)) {
                     synchronized (this) {
                         UsbDevice device = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-                        if(device == null) {
+                        if (device == null) {
                             alertMe("Got null device");
                             return;
                         }
@@ -494,17 +488,17 @@ public final class LiveStackerMain extends android.app.Activity {
         };
 
         int flags = 0;
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
             flags = PendingIntent.FLAG_MUTABLE;
-        Intent useInt=new Intent(ACTION_USB_PERMISSION);
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        Intent useInt = new Intent(ACTION_USB_PERMISSION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             useInt.setPackage("org.openlivestacker");
         }
         PendingIntent permissionIntent = PendingIntent.getBroadcast(this, REQUEST_USB_ACCESS, useInt, flags);
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
 
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-            registerReceiver(usbReceiver, filter,Context.RECEIVER_NOT_EXPORTED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+            registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         else
             registerReceiver(usbReceiver, filter);
 
@@ -521,18 +515,15 @@ public final class LiveStackerMain extends android.app.Activity {
     private static final int REQUEST_CAMERA_FOR_SIM = 117;
     private static final int REQUEST_CAMERA_FOR_ANDROID = 118;
 
-    boolean hasPerm()
-    {
+    boolean hasPerm() {
         boolean hasLPermission = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED
                 && ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                == PackageManager.PERMISSION_GRANTED
-                ;
+                == PackageManager.PERMISSION_GRANTED;
         return hasLPermission;
     }
 
-    boolean hasCameraPerm()
-    {
+    boolean hasCameraPerm() {
         boolean hasLPermission =
                 (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED);
         return hasLPermission;
@@ -543,10 +534,9 @@ public final class LiveStackerMain extends android.app.Activity {
         super.onCreate(activityState);
         Log.i("UVC", "onCreate:" + this.toString());
 
-        if(hasPerm()) {
+        if (hasPerm()) {
             getLocation();
-        }
-        else {
+        } else {
             ActivityCompat.requestPermissions(this,
                     new String[]{
                             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -560,70 +550,64 @@ public final class LiveStackerMain extends android.app.Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if(requestCode == REQUEST_PERMISSIONS) {
+        if (requestCode == REQUEST_PERMISSIONS) {
             boolean hasLoc = false;
             boolean hasNot = false;
-            for(int i=0;i<grantResults.length;i++) {
-                if(permissions[i].equals(Manifest.permission.ACCESS_FINE_LOCATION)
-                   && grantResults[i] == PackageManager.PERMISSION_GRANTED)
-                {
+            for (int i = 0; i < grantResults.length; i++) {
+                if (permissions[i].equals(Manifest.permission.ACCESS_FINE_LOCATION)
+                        && grantResults[i] == PackageManager.PERMISSION_GRANTED) {
                     hasLoc = true;
                 }
-                if(permissions[i].equals(Manifest.permission.POST_NOTIFICATIONS)
-                        && grantResults[i] == PackageManager.PERMISSION_GRANTED)
-                {
+                if (permissions[i].equals(Manifest.permission.POST_NOTIFICATIONS)
+                        && grantResults[i] == PackageManager.PERMISSION_GRANTED) {
                     hasNot = true;
                 }
             }
-            if(hasLoc) {
+            if (hasLoc) {
                 getLocation();
             }
-            if(!hasNot && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-            {
+            if (!hasNot && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 alertMe("Without notification permission you may not notices that OpenLiveStacker works in background");
             }
-        }
-        else if(requestCode == REQUEST_CAMERA_FOR_UVC
+        } else if (requestCode == REQUEST_CAMERA_FOR_UVC
                 || requestCode == REQUEST_CAMERA_FOR_ASI
                 || requestCode == REQUEST_CAMERA_FOR_TOUP
                 || requestCode == REQUEST_CAMERA_FOR_GP
                 || requestCode == REQUEST_CAMERA_FOR_ANDROID
                 || requestCode == REQUEST_CAMERA_FOR_SIM
         ) {
-            if(grantResults.length >= 1
+            if (grantResults.length >= 1
                     && grantResults[0] == PackageManager.PERMISSION_GRANTED
-                    && permissions[0].equals(Manifest.permission.CAMERA))
-            {
-                if(requestCode == REQUEST_CAMERA_FOR_UVC)
+                    && permissions[0].equals(Manifest.permission.CAMERA)) {
+                if (requestCode == REQUEST_CAMERA_FOR_UVC)
                     startUVCWithCamPerm();
-                else if(requestCode == REQUEST_CAMERA_FOR_ASI)
+                else if (requestCode == REQUEST_CAMERA_FOR_ASI)
                     startASIWithPerm();
-                else if(requestCode == REQUEST_CAMERA_FOR_TOUP)
+                else if (requestCode == REQUEST_CAMERA_FOR_TOUP)
                     startToupWithPerm();
-                else if(requestCode == REQUEST_CAMERA_FOR_GP)
+                else if (requestCode == REQUEST_CAMERA_FOR_GP)
                     startGPWithCamPerm();
-                else if(requestCode == REQUEST_CAMERA_FOR_SIM)
+                else if (requestCode == REQUEST_CAMERA_FOR_SIM)
                     openSIMCameraWithPerm();
-                else if(requestCode == REQUEST_CAMERA_FOR_ANDROID)
+                else if (requestCode == REQUEST_CAMERA_FOR_ANDROID)
                     openAndroidCamera();
             }
         }
     }
 
-    void sdAddCardItems()
-    {
-        if(hasSDCard) {
+    void sdAddCardItems() {
+        if (hasSDCard) {
             useSDCard = new CheckBox(this);
             useSDCard.setText("Use Extrnal SD Card");
             useSDCard.setChecked(getVolumeId() > 0);
             useSDCard.setOnClickListener(new View.OnClickListener() {
                                              @Override
                                              public void onClick(View view) {
-                                                 setVolumeId( useSDCard.isChecked() ? 1 : 0);
-                                                 if(!createDirs())
+                                                 setVolumeId(useSDCard.isChecked() ? 1 : 0);
+                                                 if (!createDirs())
                                                      return;
                                                  configDirs();
-                                                 if(outputDirView!=null)
+                                                 if (outputDirView != null)
                                                      outputDirView.setText(prettyDataDirName());
                                              }
                                          }
@@ -634,11 +618,10 @@ public final class LiveStackerMain extends android.app.Activity {
 
     }
 
-    void onCreateFail()
-    {
+    void onCreateFail() {
         layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        if(!errorMessage.equals("")) {
+        if (!errorMessage.equals("")) {
             TextView message = new TextView(this);
             message.setText(errorMessage);
             layout.addView(message);
@@ -647,7 +630,7 @@ public final class LiveStackerMain extends android.app.Activity {
         exit.setText("Exit - No Permissions");
         exit.setOnClickListener(new View.OnClickListener() {
             public void onClick(View view) {
-                NotificationManager notificationManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+                NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
                 notificationManager.cancelAll();
                 finishAndRemoveTask();
                 System.exit(0);
@@ -664,68 +647,65 @@ public final class LiveStackerMain extends android.app.Activity {
         setContentView(layout);
     }
 
-    String prettyDataDirName()
-    {
+    String prettyDataDirName() {
         int pos = dataDir.indexOf("/Android/media");
         int olsPos = dataDir.indexOf("/OpenLiveStacker");
-        if(pos == -1)
+        if (pos == -1)
             return "Data Location:\n" + dataDir;
-        String location = dataDir.substring(pos+1,olsPos);
-        String[] parts = dataDir.substring(0,pos).split("/");
-        String card = parts[parts.length-1];
+        String location = dataDir.substring(pos + 1, olsPos);
+        String[] parts = dataDir.substring(0, pos).split("/");
+        String card = parts[parts.length - 1];
         File internal = getExternalFilesDir(null);
-        if(dataDir.indexOf(internal.toString()) == 0)
+        if (dataDir.indexOf(internal.toString()) == 0)
             return "Data Location:\n" + location;
-        return String.format("Data Location on SDcard %s:\n%s",card,location);
+        return String.format("Data Location on SDcard %s:\n%s", card, location);
     }
 
-    void setColors(Button b)
-    {
+    void setColors(Button b) {
         b.setTextColor(Color.RED);
-        b.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(16,16,16)));
+        b.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(16, 16, 16)));
     }
-    void setColors(CheckBox v)
-    {
+
+    void setColors(CheckBox v) {
         v.setTextColor(Color.RED);
         v.setButtonTintList(ColorStateList.valueOf(Color.RED));
     }
-    void setColors(TextView v)
-    {
+
+    void setColors(TextView v) {
         v.setTextColor(Color.RED);
     }
 
-    void onCreateReal()
-    {
-        Log.i("OLS","Creating initial working directories");
-        if(!createDirs()) {
+    void onCreateReal() {
+        Log.i("OLS", "Creating initial working directories");
+        if (!createDirs()) {
             accessFailed = true;
             Intent intent = new Intent(this, WViewActivity.class);
-            intent.putExtra("uri","file:///android_asset/android_ols_permission.html");
-            intent.putExtra("FS","no");
-            intent.putExtra("landscape","no");
+            intent.putExtra("uri", "file:///android_asset/android_ols_permission.html");
+            intent.putExtra("FS", "no");
+            intent.putExtra("landscape", "no");
             startActivity(intent);
             onCreateFail();
             return;
         }
 
-        if(ols == null) {
+        if (ols == null) {
             ols = new OLSApi();
-            Log.e("OLS","Error:" + ols.getLastError());
+            Log.e("OLS", "Error:" + ols.getLastError());
         }
 
         configDirs();
 
         LinearLayout.LayoutParams defW = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,  0.0f
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0.0f
         );
         LinearLayout.LayoutParams devW = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT,  1.0f
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f
         );
         LinearLayout.LayoutParams spaceW = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,  1.0f
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f
         );
         getActionBar().setBackgroundDrawable(new ColorDrawable(Color.BLACK));
-        getActionBar().setTitle(Html.fromHtml(String.format("<font color='#ff0000'>OpenLiveStacker (%s)</font>",BuildConfig.VERSION_NAME)));
+        getActionBar().setTitle(Html.fromHtml(String.format("<font color='#ff0000'>OpenLiveStacker (%s)</font>", BuildConfig.VERSION_NAME)));
 
         layout = new LinearLayout(this);
         layout.setBackgroundColor(Color.BLACK);
@@ -784,7 +764,6 @@ public final class LiveStackerMain extends android.app.Activity {
         devices_2.addView(openAndroidCamDevice);
 
 
-
         openGPDevice = new Button(this);
         openGPDevice.setLayoutParams(devW);
         openGPDevice.setText("GPhoto");
@@ -795,7 +774,6 @@ public final class LiveStackerMain extends android.app.Activity {
         });
         setColors(openGPDevice);
         devices_2.addView(openGPDevice);
-
 
 
         openSIMDevice = new Button(this);
@@ -832,6 +810,63 @@ public final class LiveStackerMain extends android.app.Activity {
         setColors(camDebugBox);
         layout.addView(camDebugBox);
 
+        LinearLayout memlo = new LinearLayout(this);
+        devices_1.setOrientation(LinearLayout.HORIZONTAL);
+        memlo.setLayoutParams(defW);
+
+
+        memSizeMessage = new TextView(this);
+        setColors(memSizeMessage);
+        memSizeMessage.setText("Mem. Limit (MB)");
+        memSizeBox = new EditText(this);
+        setColors(memSizeBox);
+        memSizeBox.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        memSizeBox.setText(String.format("%d",getMemLimitMB()));
+        ols.setMemLimitMB(getMemLimitMB());
+        memSizeBox.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                int memSizeMb = 0;
+                try {
+                    memSizeMb = Integer.parseInt(memSizeBox.getText().toString());
+                } catch (NumberFormatException e) {
+                    memSizeMb = getDefaultMemLimitMB();
+                }
+                setMemLimitMB(memSizeMb);
+                ols.setMemLimitMB(memSizeMb);
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+
+            }
+        });
+        memSizeReset = new Button(this);
+        memSizeReset.setText("Reset");
+        setColors(memSizeReset);
+        memSizeReset.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                int def = getDefaultMemLimitMB();
+                memSizeBox.setText(String.format("%d",def));
+                setMemLimitMB(def);
+                ols.setMemLimitMB(def);
+            }
+        });
+        memSizeReset.setLayoutParams(spaceW);
+        memlo.addView(memSizeMessage);
+        memSizeBox.setLayoutParams(spaceW);
+        memlo.addView(memSizeBox);
+        memSizeReset.setLayoutParams(spaceW);
+        memlo.addView(memSizeReset);
+        layout.addView(memlo);
+
+
+
 
         reopenView = new Button(this);
         reopenView.setLayoutParams(defW);
@@ -850,14 +885,14 @@ public final class LiveStackerMain extends android.app.Activity {
         exit.setText("Close and Exit");
         exit.setOnClickListener(new View.OnClickListener() {
             public void onClick(View view) {
-                Log.i("OLS","Starting Shutdown");
-                if(olsActive) {
+                Log.i("OLS", "Starting Shutdown");
+                if (olsActive) {
                     stopAll();
                 }
-                Log.i("ols","Cacneling notifications");
-                NotificationManager notificationManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+                Log.i("ols", "Cacneling notifications");
+                NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
                 notificationManager.cancelAll();
-                Log.i("ols","Cacneling notifications done");
+                Log.i("ols", "Cacneling notifications done");
                 finishAndRemoveTask();
                 System.exit(0);
             }
@@ -904,15 +939,14 @@ public final class LiveStackerMain extends android.app.Activity {
             @Override
             public void onClick(View view) {
                 Intent intent = new Intent(LiveStackerMain.this, WViewActivity.class);
-                intent.putExtra("uri","file:///android_asset/copying.html");
-                intent.putExtra("FS","no");
-                intent.putExtra("landscape","no");
+                intent.putExtra("uri", "file:///android_asset/copying.html");
+                intent.putExtra("FS", "no");
+                intent.putExtra("landscape", "no");
                 startActivity(intent);
             }
         });
         setColors(copy);
         copyL.addView(copy);
-
 
 
         layout.addView(copyL);
@@ -922,30 +956,28 @@ public final class LiveStackerMain extends android.app.Activity {
 
     }
 
-    void stopAll()
-    {
+    void stopAll() {
         try {
-            Log.e("ols","Shuttingdown sequence");
+            Log.e("ols", "Shuttingdown sequence");
             ols.shutdown();
-            while(OLSWorker.is_running.get()) {
+            while (OLSWorker.is_running.get()) {
                 Thread.sleep(100);
             }
-            Log.i("ols","Running worked finished");
+            Log.i("ols", "Running worked finished");
         } catch (Exception e) {
-            Log.e("ols","Failed to close service:" + e.toString());
+            Log.e("ols", "Failed to close service:" + e.toString());
             alertMe("Failed to close service:" + e.toString());
         }
     }
 
-    private void selectDevice(String [] items, final UsbDevice[] devices,USBOpener opener)
-    {
+    private void selectDevice(String[] items, final UsbDevice[] devices, USBOpener opener) {
         AlertDialog selectDeviceDialog =
                 new AlertDialog.Builder(this)
                         .setTitle("Select Device")
-                        .setItems(items,new DialogInterface.OnClickListener() {
+                        .setItems(items, new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface dialogInterface, int i) {
-                                usbAccessDevice(opener,devices[i]);
+                                usbAccessDevice(opener, devices[i]);
                             }
                         })
                         .create();
@@ -953,9 +985,8 @@ public final class LiveStackerMain extends android.app.Activity {
     }
 
 
-    private void alertMe(String msg)
-    {
-        Log.e("UVC","Message" + msg);
+    private void alertMe(String msg) {
+        Log.e("UVC", "Message" + msg);
         AlertDialog alertDialog = new AlertDialog.Builder(this).create();
         alertDialog.setTitle("Alert");
         alertDialog.setMessage(msg);
@@ -968,22 +999,47 @@ public final class LiveStackerMain extends android.app.Activity {
         alertDialog.show();
     }
 
-    List<String> listExternalVolumes()
-    {
+    List<String> listExternalVolumes() {
         List<String> paths = new ArrayList<>();
         File[] edirs = getExternalMediaDirs();
-        for (int i=0;i<edirs.length;i++) {
-            if(edirs[i]==null)
+        for (int i = 0; i < edirs.length; i++) {
+            if (edirs[i] == null)
                 continue;
-            if(i > 0 && !edirs[i].exists())
+            if (i > 0 && !edirs[i].exists())
                 continue;
             String path = edirs[i].toString();
             paths.add(path);
         }
         hasSDCard = paths.size() > 1;
-        for(String p: paths)
-            Log.e("OLS","Avalible path: " + p);
+        for (String p : paths)
+            Log.e("OLS", "Avalible path: " + p);
         return paths;
+    }
+
+    int getDefaultMemLimitMB()
+    {
+        ActivityManager actManager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        ActivityManager.MemoryInfo memInfo = new ActivityManager.MemoryInfo();
+        actManager.getMemoryInfo(memInfo);
+        int memoryMB = (int)(memInfo.totalMem / (1024*1024));
+        Log.i("OLS",String.format("Device memory size %d",memoryMB));
+        return Math.max(256,memoryMB / 4);
+    }
+
+    int getMemLimitMB()
+    {
+        SharedPreferences sp = getSharedPreferences("config",0);
+        int limit =  sp.getInt("mem_limit_mb",getDefaultMemLimitMB());
+        if(limit == -1) {
+            limit = getDefaultMemLimitMB();
+        }
+        return limit == 0 ? limit : Math.max(256,limit);
+    }
+    void setMemLimitMB(int limit)
+    {
+        SharedPreferences.Editor sp = getSharedPreferences("config",0).edit();
+        sp.putInt("mem_limit_mb", limit);
+        sp.commit();
     }
 
     int getVolumeId()
@@ -1094,6 +1150,9 @@ public final class LiveStackerMain extends android.app.Activity {
     private CheckBox useSDCard;
     private LinearLayout layout;
     private TextView outputDirView;
+    private TextView memSizeMessage;
+    private EditText memSizeBox;
+    private Button memSizeReset;
 
     private String wwwData;
     private String simData;
