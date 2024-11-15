@@ -24,6 +24,7 @@ public class OLSApi {
         String ols_android_error();
         int ols_android_init(String data_path,
                              String document_root,
+                             String usr,
                              String http_ip,
                              int http_port,
                              int mem_limit_mb,
@@ -124,11 +125,12 @@ public class OLSApi {
     {
         this.mem_limit_mb = limit;
     }
-    public void setDirs(String www,String data,String lib)
+    public void setDirs(String www,String data,String lib,String usrDir)
     {
         this.lib = lib;
         this.www = www;
         this.data =data;
+        this.usr = usrDir;
     }
 
     public void check(int res,String msg) throws Exception
@@ -143,7 +145,7 @@ public class OLSApi {
                      boolean cam_debug)  throws Exception
     {
         Log.e("OLS","DRIVER DIR" + lib);
-        check(api.ols_android_init(data,www,ip,port,mem_limit_mb,lib,driver,driver_option,driver_parameter,
+        check(api.ols_android_init(data,www,usr,ip,port,mem_limit_mb,lib,driver,driver_option,driver_parameter,
                         cam_debug ? 1: 0),
                 "init");
     }
@@ -170,4 +172,5 @@ public class OLSApi {
     protected String lib;
     protected String data;
     protected String www;
+    protected String usr;
 }

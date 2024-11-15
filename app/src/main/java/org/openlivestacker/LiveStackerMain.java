@@ -1,4 +1,4 @@
-package org.openlivestacker;
+ package org.openlivestacker;
 
 import static android.app.PendingIntent.getActivity;
 import static com.zwo.ASIConstants.ASI_ERROR_CODE.ASI_SUCCESS;
@@ -71,7 +71,6 @@ public final class LiveStackerMain extends android.app.Activity {
     private static final String ACTION_USB_PERMISSION =
             "org.openlivestacker.USB_PERMISSION";
     private BroadcastReceiver usbReceiver = null;
-
     ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     private void setButtonStatus() {
@@ -1101,12 +1100,14 @@ public final class LiveStackerMain extends android.app.Activity {
 
             this.wwwData = appInfo.dataDir + "/www-data";
             this.simData = appInfo.dataDir + "/sim-data";
+            this.usrDir  = appInfo.dataDir + "/usr";
             if(!dirsReady) {
                 copyFolder("www-data", this.wwwData,true);
                 copyFolder("sim-data", this.simData,false);
+                copyFolder("usr",      this.usrDir, true);
             }
             Log.e("OLS", "WWW-Data:" + this.wwwData);
-            ols.setDirs(this.wwwData, this.dataDir, this.libDir);
+            ols.setDirs(this.wwwData, this.dataDir, this.libDir, this.usrDir);
             Log.i("OLS","www=" + wwwData + " data=" + dataDir + " lib=" + libDir);
         }
         catch(IOException e) {
@@ -1156,6 +1157,7 @@ public final class LiveStackerMain extends android.app.Activity {
 
     private String wwwData;
     private String simData;
+    private String usrDir;
     private String libDir;
     private String dataDir;
     static private UsbDeviceConnection usbDevice;
