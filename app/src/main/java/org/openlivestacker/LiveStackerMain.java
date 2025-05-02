@@ -33,6 +33,9 @@ import android.text.TextWatcher;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -41,6 +44,7 @@ import android.hardware.usb.UsbManager;
 import android.hardware.usb.UsbDevice;
 import android.content.Context;
 import android.widget.Space;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 import com.zwo.ASICameraProperty;
@@ -55,6 +59,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,19 +72,17 @@ import androidx.core.app.ActivityCompat;
 import androidx.work.WorkManager;
 import androidx.work.OneTimeWorkRequest;
 
-public final class LiveStackerMain extends android.app.Activity {
+public final class LiveStackerMain extends
+        android.app.Activity {
     private static final String ACTION_USB_PERMISSION =
             "org.openlivestacker.USB_PERMISSION";
     private BroadcastReceiver usbReceiver = null;
     ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     private void setButtonStatus() {
-        openUVCDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
-        openAndroidCamDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
-        openASIDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
-        openToupDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
-        openGPDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
-        openSIMDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
+        camSelect.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
+        indiURL.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
+        startDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         reopenView.setVisibility(olsActive ? View.VISIBLE : View.GONE);
         camDebugBox.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
         memSizeReset.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
@@ -91,10 +94,12 @@ public final class LiveStackerMain extends android.app.Activity {
 
 
     private void runService() {
-        olsActive = true;
-        setButtonStatus();
-        WorkManager workManager = WorkManager.getInstance(getApplicationContext());
-        workManager.enqueue(new OneTimeWorkRequest.Builder(OLSWorker.class).build());
+        if(!olsActive) {
+            olsActive = true;
+            setButtonStatus();
+            WorkManager workManager = WorkManager.getInstance(getApplicationContext());
+            workManager.enqueue(new OneTimeWorkRequest.Builder(OLSWorker.class).build());
+        }
 
         try {
             Thread.sleep(500);
@@ -674,6 +679,71 @@ public final class LiveStackerMain extends android.app.Activity {
         v.setTextColor(Color.RED);
     }
 
+    ArrayAdapter<String> createAdaptorWithColors(ArrayList<String> items)
+    {
+        ArrayAdapter<String> camAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, items)
+        {
+
+            public View getView(int position, View convertView, ViewGroup parent) {
+                View v = super.getView(position, convertView, parent);
+                ((TextView) v).setTextColor(Color.RED);
+                v.setBackgroundColor(Color.rgb(16,16,16));
+                return v;
+            }
+
+            public View getDropDownView(int position, View convertView, ViewGroup parent) {
+                View v = super.getDropDownView(position, convertView, parent);
+                ((TextView) v).setTextColor(Color.RED);
+                v.setBackgroundColor(Color.rgb(16,16,16));
+                return v;
+            }
+        };
+        return camAdapter;
+    }
+    final ArrayList<String> camera_driver_names = new ArrayList<>(Arrays.asList(
+            "Simulated",
+            "ASI ZWO",
+            "ToupTek",
+            "USB Video Class",
+            "GPhoto2 (DSLR)",
+            "Indi Remote",
+            "Android Camera"
+    ));
+
+    void checkSelectedCamera()
+    {
+        if(getConfigCameraId() == 5) {
+            indiURL.setVisibility(View.VISIBLE);
+        }
+        else {
+            indiURL.setVisibility(View.GONE);
+        }
+    }
+
+    void startSelectedCamera()
+    {
+        switch(getConfigCameraId()) {
+        case 0: startSimCamera();   return;
+        case 1: startASI();         return;
+        case 2: startToup();        return;
+        case 3: startUVC();         return;
+        case 4: startGP();          return;
+        case 5: startIndi();        return;
+        case 6: startAndroidCam();  return;
+        }
+    }
+
+    void startIndi() {
+        try {
+            ols.init("indi", getIndiAddr(), 0, camDebugBox.isChecked());
+            Log.e("OLS", "OLS Init done");
+            runService();
+        } catch (Exception e) {
+            alertMe("Failed to open Indi camera:" + e.toString());
+            Log.e("OLS", Log.getStackTraceString(e));
+        }
+    }
+
     void onCreateReal() {
         Log.i("OLS", "Creating initial working directories");
         if (!createDirs()) {
@@ -700,11 +770,16 @@ public final class LiveStackerMain extends android.app.Activity {
         LinearLayout.LayoutParams devW = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f
         );
+        LinearLayout.LayoutParams devW3 = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, 3.0f
+        );
         LinearLayout.LayoutParams spaceW = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f
         );
         getActionBar().setBackgroundDrawable(new ColorDrawable(Color.BLACK));
         getActionBar().setTitle(Html.fromHtml(String.format("<font color='#ff0000'>OpenLiveStacker (%s)</font>", BuildConfig.VERSION_NAME)));
+
+
 
         layout = new LinearLayout(this);
         layout.setBackgroundColor(Color.BLACK);
@@ -713,80 +788,58 @@ public final class LiveStackerMain extends android.app.Activity {
         LinearLayout devices_1 = new LinearLayout(this);
         devices_1.setOrientation(LinearLayout.HORIZONTAL);
         devices_1.setLayoutParams(defW);
-        LinearLayout devices_2 = new LinearLayout(this);
-        devices_2.setOrientation(LinearLayout.HORIZONTAL);
-        devices_2.setLayoutParams(defW);
 
-        openUVCDevice = new Button(this);
-        openUVCDevice.setLayoutParams(devW);
-        openUVCDevice.setText("UVC");
-        openUVCDevice.setOnClickListener(new View.OnClickListener() {
+        camSelect = new Spinner(this);
+        camSelect.setAdapter(createAdaptorWithColors(camera_driver_names));
+        camSelect.setSelection(getConfigCameraId());
+        camSelect.setOnItemSelectedListener( new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parentView, View selectedItemView, int position, long id) {
+                setConfigCameraId(camSelect.getSelectedItemPosition());
+                checkSelectedCamera();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parentView) {
+                // your code here
+            }
+
+        });
+
+        devices_1.addView(camSelect);
+
+        startDevice = new Button(this);
+        startDevice.setText("Start");
+        startDevice.setOnClickListener(new View.OnClickListener() {
             public void onClick(View view) {
-                startUVC();
+                startSelectedCamera();
             }
         });
-        setColors(openUVCDevice);
-        devices_1.addView(openUVCDevice);
+        setColors(startDevice);
+        camSelect.setLayoutParams(devW3);
+        startDevice.setLayoutParams(devW);
+        devices_1.addView(startDevice);
 
-
-        openASIDevice = new Button(this);
-        openASIDevice.setLayoutParams(devW);
-        openASIDevice.setText("ASI");
-        openASIDevice.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View view) {
-                startASI();
-            }
-        });
-        setColors(openASIDevice);
-        devices_1.addView(openASIDevice);
-
-        openToupDevice = new Button(this);
-        openToupDevice.setLayoutParams(devW);
-        openToupDevice.setText("Toup");
-        openToupDevice.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View view) {
-                startToup();
-            }
-        });
-        setColors(openToupDevice);
-        devices_1.addView(openToupDevice);
-
-        openAndroidCamDevice = new Button(this);
-        openAndroidCamDevice.setLayoutParams(devW);
-        openAndroidCamDevice.setText("Internal");
-        openAndroidCamDevice.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View view) {
-                startAndroidCam();
-            }
-        });
-        setColors(openAndroidCamDevice);
-        devices_2.addView(openAndroidCamDevice);
-
-
-        openGPDevice = new Button(this);
-        openGPDevice.setLayoutParams(devW);
-        openGPDevice.setText("GPhoto");
-        openGPDevice.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View view) {
-                startGP();
-            }
-        });
-        setColors(openGPDevice);
-        devices_2.addView(openGPDevice);
-
-
-        openSIMDevice = new Button(this);
-        openSIMDevice.setLayoutParams(devW);
-        openSIMDevice.setText("Sim.");
-        openSIMDevice.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View view) {
-                startSimCamera();
-            }
-        });
-        setColors(openSIMDevice);
-        devices_2.addView(openSIMDevice);
         layout.addView(devices_1);
-        layout.addView(devices_2);
+
+        indiURL = new EditText(this);
+        indiURL.setInputType(InputType.TYPE_CLASS_TEXT);
+        indiURL.setText(getIndiAddr());
+        indiURL.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                setIndiAddr(indiURL.getText().toString());
+            }
+            @Override
+            public void afterTextChanged(Editable s) {
+            }
+        });
+        setColors(indiURL);
+
+        layout.addView(indiURL);
 
         sdAddCardItems();
 
@@ -1041,6 +1094,29 @@ public final class LiveStackerMain extends android.app.Activity {
         sp.commit();
     }
 
+    int getConfigCameraId() {
+        SharedPreferences sp = getSharedPreferences("config", 0);
+        int camId = sp.getInt("selected_camera", 0);
+        return camId;
+    }
+    String getIndiAddr()
+    {
+        SharedPreferences sp = getSharedPreferences("config", 0);
+        return sp.getString("indi_addr", "hostname:7624");
+    }
+    void setIndiAddr(String addr)
+    {
+        SharedPreferences.Editor sp = getSharedPreferences("config",0).edit();
+        sp.putString("indi_addr", addr);
+        sp.commit();
+    }
+    void setConfigCameraId(int id)
+    {
+        SharedPreferences.Editor sp = getSharedPreferences("config",0).edit();
+        sp.putInt("selected_camera", id);
+        sp.commit();
+    }
+
     int getVolumeId()
     {
         SharedPreferences sp = getSharedPreferences("config",0);
@@ -1143,7 +1219,7 @@ public final class LiveStackerMain extends android.app.Activity {
         }
     }
 
-    private Button openUVCDevice, openAndroidCamDevice, openASIDevice, openSIMDevice, openToupDevice, openGPDevice;
+    private Button startDevice;
     private Button reopenView;
     private CheckBox useBrowserBox;
     private CheckBox camDebugBox;
@@ -1152,8 +1228,10 @@ public final class LiveStackerMain extends android.app.Activity {
     private LinearLayout layout;
     private TextView outputDirView;
     private TextView memSizeMessage;
+    private EditText indiURL;
     private EditText memSizeBox;
     private Button memSizeReset;
+    private Spinner camSelect;
 
     private String wwwData;
     private String simData;

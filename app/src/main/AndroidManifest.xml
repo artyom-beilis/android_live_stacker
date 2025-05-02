@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android='http://schemas.android.com/apk/res/android'
     package='org.openlivestacker'
-    android:versionCode='137'
-    android:versionName='Beta 37'
+    android:versionCode='141'
+    android:versionName='Beta 41'
     android:extractNativeLibs="true"
     >
     <uses-sdk
