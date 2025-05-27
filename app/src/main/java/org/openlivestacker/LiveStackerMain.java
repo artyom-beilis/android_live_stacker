@@ -80,16 +80,20 @@ public final class LiveStackerMain extends
     ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     private void setButtonStatus() {
-        camSelect.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
-        indiURL.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
-        startDevice.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
+        int stdvis = !olsActive ? View.VISIBLE : View.GONE;
+        camSelect.setVisibility(stdvis);
+        indiURL.setVisibility(stdvis);
+        startDevice.setVisibility(stdvis);
         reopenView.setVisibility(olsActive ? View.VISIBLE : View.GONE);
-        camDebugBox.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
-        memSizeReset.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
-        memSizeMessage.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
-        memSizeBox.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
+        camDebugBox.setVisibility(stdvis);
+        memSizeReset.setVisibility(stdvis);
+        memSizeMessage.setVisibility(stdvis);
+        memSizeBox.setVisibility(stdvis);
+        allowRemoteAccess.setVisibility(stdvis);
+        httpPortMessage.setVisibility(stdvis);
+        httpPortBox.setVisibility(stdvis);
         if (useSDCard != null)
-            useSDCard.setVisibility(!olsActive ? View.VISIBLE : View.GONE);
+            useSDCard.setVisibility(stdvis);
     }
 
 
@@ -140,30 +144,24 @@ public final class LiveStackerMain extends
 
     private void openUI() {
         String extra = "";
-        boolean useAndroidView = !useBrowserBox.isChecked();
         if (lat != -1000 && lon != -1000) {
             extra = String.format("?lat=%4.2f&lon=%4.2f", lat, lon);
         }
-        if (useAndroidView) {
-            if (extra.equals(""))
-                extra += "?";
-            else
-                extra += "&";
-            extra += "android_view=1";
-        }
-        String uri = "http://127.0.0.1:8080/" + extra;
 
-        Intent browserIntent;
-        if (useBrowserBox.isChecked()) {
-            browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
-        } else {
-            browserIntent = new Intent(this, WViewActivity.class);
-            browserIntent.putExtra("uri", uri);
-            browserIntent.putExtra("FS", "yes");
-            String value = forceLandscape.isChecked() ? "yes" : "no";
-            browserIntent.putExtra("landscape", value);
+        if (extra.equals(""))
+            extra += "?";
+        else
+            extra += "&";
 
-        }
+        extra += "android_view=1";
+        String uri = String.format("http://127.0.0.1:%d/",ols.port) + extra;
+
+
+        Intent browserIntent = new Intent(this, WViewActivity.class);
+        browserIntent.putExtra("uri", uri);
+        browserIntent.putExtra("FS", "yes");
+        String value = forceLandscape.isChecked() ? "yes" : "no";
+        browserIntent.putExtra("landscape", value);
         startActivity(browserIntent);
     }
 
@@ -850,11 +848,19 @@ public final class LiveStackerMain extends
         layout.addView(forceLandscape);
 
 
-        useBrowserBox = new CheckBox(this);
-        useBrowserBox.setLayoutParams(defW);
-        useBrowserBox.setText("Use External Browser");
-        setColors(useBrowserBox);
-        layout.addView(useBrowserBox);
+        allowRemoteAccess = new CheckBox(this);
+        allowRemoteAccess.setLayoutParams(defW);
+        allowRemoteAccess.setChecked(getAllowRemoteAccess());
+        allowRemoteAccess.setText("Allow Remote Access");
+        allowRemoteAccess.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    setAllowRemoteAccess(allowRemoteAccess.isChecked());
+                }
+            }
+        );
+        setColors(allowRemoteAccess);
+        layout.addView(allowRemoteAccess);
 
         camDebugBox = new CheckBox(this);
         camDebugBox.setLayoutParams(defW);
@@ -917,7 +923,43 @@ public final class LiveStackerMain extends
         memlo.addView(memSizeReset);
         layout.addView(memlo);
 
+        httpPortMessage = new TextView(this);
+        setColors(httpPortMessage);
+        httpPortMessage.setText("HTTP Port");
+        httpPortBox = new EditText(this);
+        setColors(httpPortBox);
+        httpPortBox.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        httpPortBox.setText(String.format("%d",getHTTPPort()));
+        httpPortBox.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
 
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                int port = 0;
+                try {
+                    port = Integer.parseInt(httpPortBox.getText().toString());
+                } catch (NumberFormatException e) {
+                    port = 8080;
+                }
+                setHTTPPort(port);
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+
+            }
+        });
+        LinearLayout httpPortLO = new LinearLayout(this);
+        devices_1.setOrientation(LinearLayout.HORIZONTAL);
+        httpPortLO.setLayoutParams(defW);
+
+        httpPortLO.addView(httpPortMessage);
+        httpPortMessage.setLayoutParams(spaceW);
+        httpPortLO.addView(httpPortBox);
+        httpPortBox.setLayoutParams(spaceW);
+        layout.addView(httpPortLO);
 
 
         reopenView = new Button(this);
@@ -1094,6 +1136,40 @@ public final class LiveStackerMain extends
         sp.commit();
     }
 
+    int getHTTPPort() {
+        SharedPreferences sp = getSharedPreferences("config", 0);
+        ols.port = sp.getInt("http_port", 8080);
+        return ols.port;
+    }
+
+    void setHTTPPort(int port)
+    {
+        SharedPreferences.Editor sp = getSharedPreferences("config",0).edit();
+        sp.putInt("http_port", port);
+        sp.commit();
+        ols.port = port;
+    }
+    boolean getAllowRemoteAccess() {
+        SharedPreferences sp = getSharedPreferences("config", 0);
+        boolean allow = sp.getBoolean("remote_access", false);
+        olsConfigRemote(allow);
+        return allow;
+    }
+
+    void olsConfigRemote(boolean allow)
+    {
+        ols.ip = allow ? "0.0.0.0" : "127.0.0.1";
+    }
+
+    void setAllowRemoteAccess(boolean allow)
+    {
+        SharedPreferences.Editor sp = getSharedPreferences("config",0).edit();
+        sp.putBoolean("remote_access", allow);
+        sp.commit();
+        olsConfigRemote(allow);
+    }
+
+
     int getConfigCameraId() {
         SharedPreferences sp = getSharedPreferences("config", 0);
         int camId = sp.getInt("selected_camera", 0);
@@ -1221,13 +1297,15 @@ public final class LiveStackerMain extends
 
     private Button startDevice;
     private Button reopenView;
-    private CheckBox useBrowserBox;
+    private CheckBox allowRemoteAccess;
     private CheckBox camDebugBox;
     private CheckBox forceLandscape;
     private CheckBox useSDCard;
     private LinearLayout layout;
     private TextView outputDirView;
     private TextView memSizeMessage;
+    private TextView httpPortMessage;
+    private EditText httpPortBox;
     private EditText indiURL;
     private EditText memSizeBox;
     private Button memSizeReset;
