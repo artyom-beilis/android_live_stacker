@@ -69,6 +69,9 @@ import java.util.concurrent.Executors;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.work.WorkManager;
 import androidx.work.OneTimeWorkRequest;
 
@@ -774,6 +777,7 @@ public final class LiveStackerMain extends
         LinearLayout.LayoutParams spaceW = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f
         );
+
         getActionBar().setBackgroundDrawable(new ColorDrawable(Color.BLACK));
         getActionBar().setTitle(Html.fromHtml(String.format("<font color='#ff0000'>OpenLiveStacker (%s)</font>", BuildConfig.VERSION_NAME)));
 
@@ -1047,7 +1051,28 @@ public final class LiveStackerMain extends
 
         setButtonStatus();
         setContentView(layout);
+        applyAndroid15Fix(layout);
+    }
 
+    void applyAndroid15Fix(View view)
+    {
+        ViewCompat.setOnApplyWindowInsetsListener(view, (v, windowInsets) -> {
+            Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+            // Apply the insets as a margin to the view. This solution sets only the
+            // bottom, left, and right dimensions, but you can apply whichever insets are
+            // appropriate to your layout. You can also update the view padding if that's
+            // more appropriate.
+            ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) v.getLayoutParams();
+            mlp.leftMargin = insets.left;
+            mlp.bottomMargin = insets.bottom;
+            mlp.rightMargin = insets.right;
+            mlp.topMargin = insets.top;
+            v.setLayoutParams(mlp);
+
+            // Return CONSUMED if you don't want the window insets to keep passing
+            // down to descendant views.
+            return WindowInsetsCompat.CONSUMED;
+        });
     }
 
     void stopAll() {
