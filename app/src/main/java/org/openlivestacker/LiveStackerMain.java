@@ -86,6 +86,7 @@ public final class LiveStackerMain extends
         int stdvis = !olsActive ? View.VISIBLE : View.GONE;
         camSelect.setVisibility(stdvis);
         indiURL.setVisibility(stdvis);
+        alpacaURL.setVisibility(stdvis);
         startDevice.setVisibility(stdvis);
         reopenView.setVisibility(olsActive ? View.VISIBLE : View.GONE);
         camDebugBox.setVisibility(stdvis);
@@ -708,6 +709,7 @@ public final class LiveStackerMain extends
             "USB Video Class",
             "GPhoto2 (DSLR)",
             "Indi Remote",
+            "Alpaca",
             "Android Camera"
     ));
 
@@ -718,6 +720,12 @@ public final class LiveStackerMain extends
         }
         else {
             indiURL.setVisibility(View.GONE);
+        }
+        if(getConfigCameraId() == 6) {
+            alpacaURL.setVisibility(View.VISIBLE);
+        }
+        else {
+            alpacaURL.setVisibility(View.GONE);
         }
     }
 
@@ -730,7 +738,8 @@ public final class LiveStackerMain extends
         case 3: startUVC();         return;
         case 4: startGP();          return;
         case 5: startIndi();        return;
-        case 6: startAndroidCam();  return;
+        case 6: startAlpaca();      return;
+        case 7: startAndroidCam();  return;
         }
     }
 
@@ -741,6 +750,16 @@ public final class LiveStackerMain extends
             runService();
         } catch (Exception e) {
             alertMe("Failed to open Indi camera:" + e.toString());
+            Log.e("OLS", Log.getStackTraceString(e));
+        }
+    }
+    void startAlpaca() {
+        try {
+            ols.init("alpaca", getAlpacaAddr(), 0, camDebugBox.isChecked());
+            Log.e("OLS", "OLS Init done");
+            runService();
+        } catch (Exception e) {
+            alertMe("Failed to open Alpaca camera:" + e.toString());
             Log.e("OLS", Log.getStackTraceString(e));
         }
     }
@@ -842,6 +861,27 @@ public final class LiveStackerMain extends
         setColors(indiURL);
 
         layout.addView(indiURL);
+
+        alpacaURL = new EditText(this);
+        alpacaURL.setInputType(InputType.TYPE_CLASS_TEXT);
+        alpacaURL.setText(getAlpacaAddr());
+        alpacaURL.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                setAlpacaAddr(alpacaURL.getText().toString());
+            }
+            @Override
+            public void afterTextChanged(Editable s) {
+            }
+        });
+        setColors(alpacaURL);
+
+        layout.addView(alpacaURL);
+
+
 
         sdAddCardItems();
 
@@ -1211,6 +1251,19 @@ public final class LiveStackerMain extends
         sp.putString("indi_addr", addr);
         sp.commit();
     }
+    String getAlpacaAddr()
+    {
+        SharedPreferences sp = getSharedPreferences("config", 0);
+        return sp.getString("alpaca_addr", "auto");
+    }
+    void setAlpacaAddr(String addr)
+    {
+        SharedPreferences.Editor sp = getSharedPreferences("config",0).edit();
+        sp.putString("alpaca_addr", addr);
+        sp.commit();
+    }
+
+
     void setConfigCameraId(int id)
     {
         SharedPreferences.Editor sp = getSharedPreferences("config",0).edit();
@@ -1332,6 +1385,7 @@ public final class LiveStackerMain extends
     private TextView httpPortMessage;
     private EditText httpPortBox;
     private EditText indiURL;
+    private EditText alpacaURL;
     private EditText memSizeBox;
     private Button memSizeReset;
     private Spinner camSelect;
