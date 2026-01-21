@@ -33,12 +33,19 @@ public class OLSWorker extends Worker {
     }
 
     public static final AtomicBoolean is_running = new AtomicBoolean(false);
+    public static final AtomicBoolean was_running = new AtomicBoolean(false);
 
     @SuppressLint("RestrictedApi")
     @NonNull
     @Override
     public Result doWork() {
+        if(was_running.get()) {
+            Log.e("OLS", "Open Live Stacker Attempts to rerun worker");
+            LiveStackerMain.ols.log("Attempt to rerun OLS");
+            return Result.success();
+        }
         is_running.set(true);
+        was_running.set(true);
         int seconds = 0;
         Thread runThread = new Thread(new Runnable() {
             @Override
@@ -50,6 +57,7 @@ public class OLSWorker extends Worker {
                 } finally {
                     Log.i("ols", "Stacker processing existed");
                 }
+                LiveStackerMain.ols.log("App Finished!");
             }
         });
         runThread.start();

@@ -323,7 +323,7 @@ public final class LiveStackerMain extends
     }
 
 
-    private void startToupDevice(Context context, UsbDevice device) {
+    private void startToupBasedDevice(Context context, UsbDevice device, String driver) {
         try {
             UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
             UsbDeviceConnection connection = manager.openDevice(device);
@@ -337,10 +337,10 @@ public final class LiveStackerMain extends
                 name = "Camera";
 
             String driver_opt = String.format("%d %04x %04x:%s", fd, vendorId, productId, name);
-            ols.init("toup", driver_opt, -1, camDebugBox.isChecked());
+            ols.init(driver, driver_opt, -1, camDebugBox.isChecked());
             runService();
         } catch (Exception e) {
-            alertMe("Failed to open Toup Camera:" + e.toString());
+            alertMe("Failed to open " + driver + " Camera:" + e.toString());
             Log.e("OLS", "Failed to open camera from native code:" + e.toString());
         }
     }
@@ -417,13 +417,33 @@ public final class LiveStackerMain extends
 
         }
     }
+    private void startMeade() {
+        if (hasCameraPerm()) {
+            startMeadeWithPerm();
+        } else {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{
+                            Manifest.permission.CAMERA
+                    },
+                    REQUEST_CAMERA_FOR_MEADE);
+
+        }
+    }
 
 
     private void startToupWithPerm() {
         usbAccess(new USBOpener() {
             @Override
             public void open(Context context, UsbDevice device) {
-                startToupDevice(context, device);
+                startToupBasedDevice(context, device, "toup");
+            }
+        });
+    }
+    private void startMeadeWithPerm() {
+        usbAccess(new USBOpener() {
+            @Override
+            public void open(Context context, UsbDevice device) {
+                startToupBasedDevice(context, device, "meade");
             }
         });
     }
@@ -517,9 +537,10 @@ public final class LiveStackerMain extends
     private static final int REQUEST_CAMERA_FOR_UVC = 113;
     private static final int REQUEST_CAMERA_FOR_ASI = 114;
     private static final int REQUEST_CAMERA_FOR_TOUP = 115;
-    private static final int REQUEST_CAMERA_FOR_GP = 116;
-    private static final int REQUEST_CAMERA_FOR_SIM = 117;
-    private static final int REQUEST_CAMERA_FOR_ANDROID = 118;
+    private static final int REQUEST_CAMERA_FOR_MEADE = 116;
+    private static final int REQUEST_CAMERA_FOR_GP = 117;
+    private static final int REQUEST_CAMERA_FOR_SIM = 118;
+    private static final int REQUEST_CAMERA_FOR_ANDROID = 119;
 
     boolean hasPerm() {
         boolean hasLPermission = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -578,6 +599,7 @@ public final class LiveStackerMain extends
         } else if (requestCode == REQUEST_CAMERA_FOR_UVC
                 || requestCode == REQUEST_CAMERA_FOR_ASI
                 || requestCode == REQUEST_CAMERA_FOR_TOUP
+                || requestCode == REQUEST_CAMERA_FOR_MEADE
                 || requestCode == REQUEST_CAMERA_FOR_GP
                 || requestCode == REQUEST_CAMERA_FOR_ANDROID
                 || requestCode == REQUEST_CAMERA_FOR_SIM
@@ -591,6 +613,8 @@ public final class LiveStackerMain extends
                     startASIWithPerm();
                 else if (requestCode == REQUEST_CAMERA_FOR_TOUP)
                     startToupWithPerm();
+                else if (requestCode == REQUEST_CAMERA_FOR_MEADE)
+                    startMeadeWithPerm();
                 else if (requestCode == REQUEST_CAMERA_FOR_GP)
                     startGPWithCamPerm();
                 else if (requestCode == REQUEST_CAMERA_FOR_SIM)
@@ -706,6 +730,7 @@ public final class LiveStackerMain extends
             "Simulated",
             "ASI ZWO",
             "ToupTek",
+            "Meade",
             "USB Video Class",
             "GPhoto2 (DSLR)",
             "Indi Remote",
@@ -715,13 +740,13 @@ public final class LiveStackerMain extends
 
     void checkSelectedCamera()
     {
-        if(getConfigCameraId() == 5) {
+        if(getConfigCameraId() == 6) {
             indiURL.setVisibility(View.VISIBLE);
         }
         else {
             indiURL.setVisibility(View.GONE);
         }
-        if(getConfigCameraId() == 6) {
+        if(getConfigCameraId() == 7) {
             alpacaURL.setVisibility(View.VISIBLE);
         }
         else {
@@ -735,11 +760,12 @@ public final class LiveStackerMain extends
         case 0: startSimCamera();   return;
         case 1: startASI();         return;
         case 2: startToup();        return;
-        case 3: startUVC();         return;
-        case 4: startGP();          return;
-        case 5: startIndi();        return;
-        case 6: startAlpaca();      return;
-        case 7: startAndroidCam();  return;
+        case 3: startMeade();        return;
+        case 4: startUVC();         return;
+        case 5: startGP();          return;
+        case 6: startIndi();        return;
+        case 7: startAlpaca();      return;
+        case 8: startAndroidCam();  return;
         }
     }
 

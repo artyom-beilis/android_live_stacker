@@ -33,6 +33,7 @@ public class OLSApi {
                              String driver_config,
                              int driver_parameter,
                              int cam_debug);
+        void ols_write_to_log(String msg);
         int ols_android_run();
         int ols_android_shutdown();
         int ols_android_get_frames_count();
@@ -155,6 +156,10 @@ public class OLSApi {
         return api.ols_android_get_frames_count();
     }
 
+    public void log(String message)
+    {
+        api.ols_write_to_log(message);
+    }
     public void run() throws Exception
     {
         check(api.ols_android_run(),"run");
